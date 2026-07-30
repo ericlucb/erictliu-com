@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 """Regenerate the favicons and the link-preview image from the portrait.
 
-The drawing lives in index.html, so it is the single source of truth — this
-pulls the <svg id="kSvg"> block straight out of the page rather than keeping a
-second copy that could drift.
+The drawing in index.html is only a rough placeholder: hairD() rebuilds the
+hair as smooth beziers at runtime, and the theme colours are picked at random
+on load. So this renders the real page in headless Chrome and takes the
+portrait from the *rendered* DOM — building straight from the source markup
+gives you the angular, unsmoothed version.
 
-Needs rsvg-convert and ImageMagick:  brew install librsvg imagemagick
+Needs Chrome, rsvg-convert and ImageMagick:
+    brew install librsvg imagemagick
 """
 
 import re
@@ -21,16 +24,60 @@ MUTED = "#a6a7ac"
 # The square of the drawing's own coordinate space that frames the head.
 HEAD_VIEWBOX = "332 110 404 404"
 
+CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 
-def portrait_markup() -> str:
+# Pin the random theme to PAIRS[0] (black on cream), point the eyes straight
+# ahead, let the springs settle, then freeze so the dump is a still frame.
+HARNESS_HEAD = "<script>Math.random=function(){return 0;};</script>\n"
+HARNESS_TAIL = """
+<script>
+(function wait(){
+  if (window.__erk) {
+    __erk.aim(0.5, 0.5);
+    __erk.settle(6);
+    window.requestAnimationFrame = function(){ return 0; };
+    document.documentElement.setAttribute('data-render-ready', '1');
+  } else setTimeout(wait, 25);
+})();
+</script>
+"""
+
+
+def rendered_dom() -> str:
+    """index.html as the browser has it after the script has run and settled."""
+    page = (HERE / "index.html").read_text()
+    page = page.replace(
+        '<script src="./support.js"></script>',
+        HARNESS_HEAD + '<script src="./support.js"></script>', 1)
+
+    # Must sit beside index.html so ./support.js still resolves.
+    harness = HERE / ".render.html"
+    harness.write_text(page + HARNESS_TAIL)
+    try:
+        dom = subprocess.run(
+            [CHROME, "--headless", "--disable-gpu", "--no-sandbox",
+             "--virtual-time-budget=8000", "--dump-dom", harness.resolve().as_uri()],
+            check=True, capture_output=True, text=True,
+        ).stdout
+    finally:
+        harness.unlink(missing_ok=True)
+
+    if "data-render-ready" not in dom:
+        raise SystemExit("the page never finished booting — nothing to capture")
+    return dom
+
+
+def portrait_markup(dom: str) -> str:
     """The contents of the portrait <svg>, as well-formed XML."""
-    src = (HERE / "index.html").read_text()
-    start = src.index('<svg id="kSvg"')
-    end = src.index("</svg>", start) + len("</svg>")
-    svg = src[start:end].replace('style="will-change:transform;"', "")
+    # The runtime adds its own attributes, so id="kSvg" is not necessarily first.
+    marker = dom.index('id="kSvg"')
+    start = dom.rindex("<svg", 0, marker)
+    end = dom.index("</svg>", start) + len("</svg>")
+    svg = dom[start:end]
+    svg = svg.replace("will-change: transform;", "").replace("will-change:transform;", "")
 
-    # The page markup carries one unmatched </g>. Browsers forgive it; the XML
-    # parser behind rsvg-convert does not, so drop the stray closer.
+    # Safety net: any unmatched </g> is fatal to an XML parser even though
+    # browsers forgive it.
     tag = re.compile(r"<(/?)g(\s[^>]*?)?>")
     out, depth, pos = [], 0, 0
     for m in tag.finditer(svg):
@@ -46,7 +93,9 @@ def portrait_markup() -> str:
     out.append(svg[pos:])
     svg = "".join(out)
 
-    inner = re.sub(r'^<svg id="kSvg" viewBox="0 0 960 720"[^>]*>', "", svg, count=1)
+    inner = re.sub(r"^<svg\b[^>]*>", "", svg, count=1)
+    if inner == svg:
+        raise SystemExit("could not strip the <svg> wrapper")
     return inner[:inner.rindex("</svg>")]
 
 
@@ -62,7 +111,7 @@ def render(svg_text: str, width: int, height: int, out: Path) -> None:
 
 
 def main() -> None:
-    inner = portrait_markup()
+    inner = portrait_markup(rendered_dom())
     x, y, size, _ = HEAD_VIEWBOX.split()
 
     icon = (
