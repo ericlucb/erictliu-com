@@ -39,11 +39,14 @@
   #kPanelT svg { transition:transform .4s ease; }
   #kPanelT:hover svg { transform:rotate(60deg); }
   @media (max-width: 880px) {
-    #kSvg { width:calc(min(94vw, 62vh) * var(--pk, 1)) !important; margin-right:0 !important; margin-left:calc(min(94vw, 62vh) * (1 - var(--pk, 1)) * 0.125) !important; justify-self:center !important; align-self:start !important; margin-top:23vh !important; }
+    /* The head is drawn at x=540 of a 960-wide viewBox, so centring the svg box
+       leaves it 6.25% of the width right of centre. Pull it back by twice that
+       — under justify-self:center a margin shifts the box by half its value. */
+    #kSvg { width:calc(min(94vw, 62vh) * var(--pk, 1)) !important; margin-right:0 !important; margin-left:calc(min(94vw, 62vh) * (1 - var(--pk, 1)) * 0.125 - min(94vw, 62vh) * var(--pk, 1) * 0.125) !important; justify-self:center !important; align-self:start !important; margin-top:23vh !important; }
     #kCopy { left:50% !important; top:6vh !important; transform:translate(-50%, 0) !important; justify-items:center !important; gap:20px !important; text-align:center !important; max-width:92vw !important; }
     #kCopy h1 { font-size:clamp(40px, 13vw, 68px) !important; }
-    #kNav { left:0 !important; right:0 !important; top:auto !important; bottom:max(6vh, 30px) !important; transform:none !important; justify-items:center !important; text-align:center !important; font-size:clamp(12px, 3.4vw, 18px) !important; }
-    #kPanel { left:calc(50% + min(94vw, 62vh) * 0.0625) !important; right:auto !important; bottom:auto !important; top:min(calc(23vh + min(94vw, 62vh) * var(--pk, 1) * 0.5625 + 14px), calc(100vh - 44px)) !important; transform:translateX(-50%) !important; }
+    #kNav { left:0 !important; right:0 !important; top:auto !important; bottom:max(6vh, 30px) !important; transform:none !important; justify-items:center !important; text-align:center !important; font-size:clamp(10px, 2.6vw, 13px) !important; }
+    #kPanel { left:50% !important; right:auto !important; bottom:auto !important; top:min(calc(23vh + min(94vw, 62vh) * var(--pk, 1) * 0.5625 + 14px), calc(100vh - 44px)) !important; transform:translateX(-50%) !important; }
     #kPanelB { width:min(336px, 92vw) !important; }
     #kCols { grid-template-columns:1fr 1fr !important; gap:12px 16px !important; }
   }
