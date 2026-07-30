@@ -37,17 +37,15 @@ Use something you have the rights to — the repo and the site are both public.
 
 ## Deploying
 
-Pushing to `main` publishes to GitHub Pages:
-https://ericlucb.github.io/erictliu-com/
+Pushing to `main` publishes to GitHub Pages, live at https://erictliu.com.
 
-## Custom domain
+## Domain
 
-Not attached yet — erictliu.com was unregistered as of July 2026. Once the
-domain is in a registrar account:
+Registered at Cloudflare, which also serves the DNS. The apex has four A
+records pointing at GitHub Pages (`185.199.108.153`, `.109.153`, `.110.153`,
+`.111.153`) and `www` is a CNAME to `ericlucb.github.io`; `www` redirects to
+the apex. All of them are **DNS only** (grey cloud) — turning Cloudflare's
+proxy on stops GitHub from renewing its Let's Encrypt certificate.
 
-1. At the registrar, point the apex at GitHub Pages with four A records
-   (`185.199.108.153`, `185.199.109.153`, `185.199.110.153`, `185.199.111.153`)
-   and a `www` CNAME to `ericlucb.github.io`.
-2. In this repo, Settings → Pages → Custom domain → enter the domain. That
-   writes a `CNAME` file back to the repo.
-3. Wait for the DNS check to pass, then tick "Enforce HTTPS".
+`CNAME` in this repo is what binds the domain to the site. Deleting it
+unbinds the domain, so leave it in place.
