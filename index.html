@@ -39,11 +39,11 @@
   #kPanelT svg { transition:transform .4s ease; }
   #kPanelT:hover svg { transform:rotate(60deg); }
   @media (max-width: 880px) {
-    #kSvg { width:calc(min(94vw, 62vh) * var(--pk, 1)) !important; margin-right:0 !important; margin-left:calc(min(94vw, 62vh) * (1 - var(--pk, 1)) * 0.125) !important; justify-self:center !important; align-self:start !important; margin-top:17vh !important; }
+    #kSvg { width:calc(min(94vw, 62vh) * var(--pk, 1)) !important; margin-right:0 !important; margin-left:calc(min(94vw, 62vh) * (1 - var(--pk, 1)) * 0.125) !important; justify-self:center !important; align-self:start !important; margin-top:23vh !important; }
     #kCopy { left:50% !important; top:6vh !important; transform:translate(-50%, 0) !important; justify-items:center !important; gap:20px !important; text-align:center !important; max-width:92vw !important; }
     #kCopy h1 { font-size:clamp(40px, 13vw, 68px) !important; }
     #kNav { display:none !important; }
-    #kPanel { left:calc(50% + min(94vw, 62vh) * 0.0625) !important; right:auto !important; bottom:auto !important; top:min(calc(17vh + min(94vw, 62vh) * var(--pk, 1) * 0.5625 + 14px), calc(100vh - 44px)) !important; transform:translateX(-50%) !important; }
+    #kPanel { left:calc(50% + min(94vw, 62vh) * 0.0625) !important; right:auto !important; bottom:auto !important; top:min(calc(23vh + min(94vw, 62vh) * var(--pk, 1) * 0.5625 + 14px), calc(100vh - 44px)) !important; transform:translateX(-50%) !important; }
     #kPanelB { width:min(336px, 92vw) !important; }
     #kCols { grid-template-columns:1fr 1fr !important; gap:12px 16px !important; }
   }
@@ -300,10 +300,12 @@ const IDS = ['kStage','kSvg','kHead','kFace','kFaceLine','kHair','kHairSh','kChi
   'kNeckL','kNeckR','kNeckFill','kReset','kNeckClipP','kHairClip','kHairP','kHairShP','kLegacy','kStats','kReadout','kBar','kDance'];
 
 // Background music for DANCE MODE. Put an audio file next to index.html and
-// point `src` at it — .mp3, .m4a and .ogg all work. `bpm` is the track's tempo
-// and only drives how fast the head bops, so set it to match. If `src` is empty
-// or the file will not play, the built-in synth beat is used instead.
-const MUSIC = { src: './music.mp3', bpm: 96, volume: 0.55 };
+// point `src` at it — .mp3, .m4a and .ogg all work. If `src` is empty or the
+// file will not play, the built-in synth beat is used instead.
+// `bpm` is the track's tempo and `offset` is where the first beat lands, in
+// seconds — together they place the beat grid the head bobs on. Measured for
+// the current track by autocorrelating its onset envelope.
+const MUSIC = { src: './music.mp3', bpm: 132.5, offset: 0.254, volume: 0.55 };
 
 const WORDS = ['ENTER', 'GET READY', 'STAY AWAY', 'PLZ DON\u2019T CLICK', 'BOOP', 'LOOK AWAY', 'PROB NOTHING HERE', 'GO ON THEN', 'PSST', 'LOOK HERE', 'DON\u2019T CLICK', 'OH HI'];
 const PAIRS = [
@@ -759,7 +761,12 @@ class Component extends DCLogic {
     if (this.dance) {
       const BEAT = 60 / MUSIC.bpm, el = T - this.danceT0;
       const ramp = SS(0, 1.4, el);
-      const ph = (el / BEAT) % 1, bar = (el / (BEAT * 4)) % 1;
+      // Follow the audio clock when a track is playing so the bop cannot drift
+      // away from the beat over a long track; fall back to wall time otherwise.
+      const tr = this.track;
+      const bt = tr && !tr.paused ? tr.currentTime - MUSIC.offset : el;
+      const wrap = (x) => ((x % 1) + 1) % 1;
+      const ph = wrap(bt / BEAT), bar = wrap(bt / (BEAT * 4));
       tx = 0.42 * Math.sin(bar * Math.PI * 2) * ramp;
       ty = (-0.04 + 0.36 * Math.sin(ph * Math.PI * 2) + 0.11 * Math.sin(ph * Math.PI * 4)) * ramp;
       this.danceBop = (0.5 * (1 - Math.cos(ph * Math.PI * 2)) + 0.09 * (1 - Math.cos(ph * Math.PI * 4))) * ramp;
