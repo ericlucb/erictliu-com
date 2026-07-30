@@ -39,6 +39,18 @@ Use something you have the rights to — the repo and the site are both public.
 
 Pushing to `main` publishes to GitHub Pages, live at https://erictliu.com.
 
+## Icons and link preview
+
+`icon.svg`, `favicon.ico`, `apple-touch-icon.png` and `og.png` are all
+generated from the portrait already in `index.html` by `make-icons.py`:
+
+```bash
+python3 make-icons.py
+```
+
+Re-run it after changing the drawing. It needs `rsvg-convert` and ImageMagick
+(`brew install librsvg imagemagick`).
+
 ## Domain
 
 Registered at Cloudflare, which also serves the DNS. The apex has four A
