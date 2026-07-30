@@ -84,6 +84,10 @@
        nothing on a short screen. Scale off the height instead. */
     #kStage { --pw:min(56vw, calc(var(--vph) * 1.6)) !important; }
     #kPanel { top:min(calc(50% + var(--pw) * var(--pk, 1) * 0.215), calc(var(--vph) - 44px)) !important; }
+    /* Sit the label hard right and cap it so long phrases wrap instead of
+       reaching into the face. The head is ~0.135 of --pw either side of its
+       centre and it moves as it tracks, so budget 0.155 and leave 50px clear. */
+    #kNav { right:10px !important; max-width:calc(var(--mr) + var(--pw) * 0.2825 - 60px) !important; text-align:right !important; line-height:1.5 !important; }
     /* The body is centred on the toggle, which sits right of centre under the
        face. Twice the toggle's distance from the right edge is the widest it
        can be without running off screen. */
