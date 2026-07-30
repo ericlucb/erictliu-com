@@ -12,15 +12,28 @@ Then open http://localhost:8000.
 
 ## Background music
 
-`DANCE MODE` plays `music.mp3` if it exists, and falls back to the built-in
-synth beat if it does not. To use your own track:
+`DANCE MODE` plays `music.mp3`, and falls back to the built-in synth beat if
+that file is missing or will not play.
 
-1. Drop the file in this folder (`.mp3`, `.m4a`, and `.ogg` all work).
-2. In `index.html`, find the `MUSIC` config near the top of the script and set
-   `src` to the filename and `bpm` to the track's tempo — `bpm` is what keeps
-   the head bobbing in time. `volume` is 0–1.
+Current track: **Back To You (UK Garage)** by JayStacksBeats, from Pixabay
+under the [Pixabay Content License](https://pixabay.com/service/license-summary/)
+(free for commercial use, no attribution required). Re-encoded from 256 kbps to
+128 kbps to halve the download.
 
-Keep the file under ~5 MB so the page stays quick to load.
+To swap it out:
+
+1. Drop the file in this folder (`.mp3`, `.m4a`, and `.ogg` all work), and
+   re-encode if it is much over ~3 MB:
+   `ffmpeg -i in.mp3 -b:a 128k -ar 44100 music.mp3`
+2. In `index.html`, update the `MUSIC` config near the top of the script.
+   `bpm` and `offset` place the beat grid the head bobs on — `offset` is where
+   the first beat lands, in seconds. Getting these right is what makes the
+   bop land on the beat rather than near it.
+
+The animation reads the audio element's own clock, so it stays locked to the
+track for its full length instead of drifting.
+
+Use something you have the rights to — the repo and the site are both public.
 
 ## Deploying
 
