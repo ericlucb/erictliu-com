@@ -240,8 +240,8 @@
       <button id="kPanelT" type="button" class="tx" style="box-sizing:border-box; display:flex; align-items:center; justify-content:center; gap:9px; width:100%; padding:8px 12px; color:#9a9b9f; font-size:clamp(11px, min(1vw, 1.9vh), 17px); letter-spacing:.15em; cursor:pointer;"><svg viewBox="0 0 24 24" style="width:1.4em; height:1.4em; display:block;" aria-hidden="true"><circle cx="12" cy="12" r="5.4" fill="none" stroke="currentColor" stroke-width="2.2"></circle><g stroke="currentColor" stroke-width="2.8"><path d="M12 5 V2.4"></path><path d="M12 19 V21.6"></path><path d="M5 12 H2.4"></path><path d="M19 12 H21.6"></path><path d="M7.05 7.05 L5.2 5.2"></path><path d="M16.95 16.95 L18.8 18.8"></path><path d="M16.95 7.05 L18.8 5.2"></path><path d="M7.05 16.95 L5.2 18.8"></path></g></svg>PLAY</button>
     </div>
     <div id="kPanelB" style="display:none; box-sizing:border-box; gap:10px; position:absolute; top:calc(100% + 9px); left:50%; transform:translateX(-50%); width:min(452px, 88vw); padding:12px 14px 13px; background:rgba(255,255,255,.94); border:1px solid #e2e1dc; border-radius:11px; backdrop-filter:blur(7px); box-shadow:0 8px 30px rgba(20,20,20,.07); max-height:calc(100vh - 120px); overflow:auto;">
-      <div id="kBar" style="display:flex; flex-wrap:wrap; align-items:center; gap:8px; font:10px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing:.09em; color:#a6a7ac; user-select:none;">
-        <button id="kDance" type="button" data-on="0" style="flex:0 0 auto; white-space:nowrap;">DANCE</button><label style="display:flex; align-items:center; justify-content:center; gap:7px; flex:0 1 auto; padding:4px 11px; border:1px solid #e2e1dc; border-radius:999px; color:#a6a7ac; cursor:pointer; white-space:nowrap;"><span>IDLE LIFE</span><input type="checkbox" data-p="idleLife" style="accent-color:#141414; width:12px; height:12px; margin:0; cursor:pointer;"></label><button id="kShuffle" type="button" style="white-space:nowrap;">SHUFFLE COLORS</button><button id="kReset" type="button">RESET</button>
+      <div id="kBar" style="display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:8px; font:10px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing:.09em; color:#a6a7ac; user-select:none;">
+        <button id="kDance" type="button" data-on="0" style="flex:0 0 auto; white-space:nowrap;">DANCE</button><button id="kLife" type="button" data-on="1" style="flex:0 0 auto; white-space:nowrap;">IDLE LIFE</button><button id="kShuffle" type="button" style="white-space:nowrap;">SHUFFLE COLORS</button><button id="kReset" type="button">RESET</button>
         <span style="display:none;"><button id="kLegacy" type="button" data-on="0">OLD RIG</button><button id="kStats" type="button" data-on="0">FPS</button><span id="kReadout">bezier rig</span></span>
       </div>
       <div id="kCols" style="display:grid; grid-template-columns:repeat(3, 1fr); gap:11px 20px; align-items:start;">
@@ -541,14 +541,12 @@ class Component extends DCLogic {
       b.style.left = '50%';
       b.style.transform = 'translateX(-50%)';
       const cols = document.getElementById('kCols'), inner = cols ? [].slice.call(cols.children) : [];
-      const bar = document.getElementById('kBar');
       const stack = () => {
         b.style.width = 'min(452px, 88vw)';
         cols.style.display = 'grid';
         cols.style.gridTemplateColumns = 'repeat(3, 1fr)';
         cols.style.justifyContent = '';
         inner.forEach(c => { c.style.display = 'grid'; });
-        if (bar) bar.style.justifyContent = '';
       };
       // clusters side by side: 3 sliders | 3 sliders | ink + background
       const spread = () => {
@@ -557,7 +555,6 @@ class Component extends DCLogic {
         cols.style.gridTemplateColumns = 'repeat(auto-fit, minmax(0, 168px))';
         cols.style.justifyContent = 'center';
         inner.forEach((c, i) => { c.style.display = i === 2 ? 'contents' : 'grid'; });
-        if (bar) bar.style.justifyContent = 'center';
       };
       // everything on one line — for wide, short windows
       const flatten = () => {
@@ -610,6 +607,11 @@ class Component extends DCLogic {
       if (!t) return;
       if (t.id === 'kDance') { this.toggleDance(); return; }
       if (t.id === 'kShuffle') { this.shuffle(); return; }
+      if (t.id === 'kLife') {
+        this.props.idleLife = this.props.idleLife === false;
+        t.setAttribute('data-on', this.props.idleLife ? '1' : '0');
+        return;
+      }
       if (t.id === 'kReset') {
         const D = { travel: 76, responsiveness: 1.75, springiness: 0.9, roll: 6, hairWrap: 1,
           pitchDepth: 0.62, idleLife: true };
@@ -700,8 +702,8 @@ class Component extends DCLogic {
       const out = document.querySelector('[data-out="' + k + '"]');
       if (out) out.textContent = (k === 'travel' || k === 'roll') ? String(v) : Number(v).toFixed(2);
     }
-    const life = document.querySelector('input[data-p="idleLife"]');
-    if (life) life.checked = this.props.idleLife !== false;
+    const life = document.getElementById('kLife');
+    if (life) life.setAttribute('data-on', this.props.idleLife !== false ? '1' : '0');
     const ink = (this.theme || {}).ink || '#141414', bg = (this.theme || {}).bg || '#fbfbfa';
     document.querySelectorAll('[data-c="inkColor"]').forEach(b => b.setAttribute('data-on', b.dataset.v === ink ? '1' : '0'));
     document.querySelectorAll('[data-c="bgColor"]').forEach(b => b.setAttribute('data-on', b.dataset.v === bg ? '1' : '0'));
