@@ -1,0 +1,945 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>eric liu</title>
+<meta name="description" content="Eric Liu — personal site.">
+<meta property="og:title" content="eric liu">
+<meta property="og:description" content="Eric Liu — personal site.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://erictliu.com/">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='42' fill='%23141414'/></svg>">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Instrument+Sans:wght@400;500;600&family=Gabarito:wght@500;700;900&display=swap" rel="stylesheet">
+<style>
+  html, body { margin:0; height:100%; background:#fbfbfa; overflow:hidden; }
+  body { -webkit-font-smoothing:antialiased; }
+  a { color:#141414; text-decoration:none; }
+  a:hover { color:#141414; }
+  #kBar button { appearance:none; background:transparent; border:1px solid #e2e1dc; color:#a6a7ac;
+    font:inherit; letter-spacing:.09em; padding:5px 11px; border-radius:999px; cursor:pointer; transition:color .16s, border-color .16s; }
+  #kBar button:hover { color:#141414; border-color:#c5c4bd; }
+  #kBar button[data-on="1"] { color:#141414; border-color:#141414; }
+  #kPanel input[type=range] { -webkit-appearance:none; appearance:none; height:3px; background:#e2e1dc; border-radius:2px; outline:none; }
+  #kPanel input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:13px; height:13px; border-radius:50%; background:#141414; cursor:pointer; }
+  #kPanel input[type=range]::-moz-range-thumb { width:13px; height:13px; border:0; border-radius:50%; background:#141414; cursor:pointer; }
+  #kPanel .sw { width:22px; height:22px; border-radius:50%; border:1px solid #d8d7d2; cursor:pointer; padding:0; }
+  #kPanel .sw[data-on="1"] { box-shadow:0 0 0 2px #141414; }
+  #kPanel button.tx { appearance:none; background:transparent; border:0; color:#a6a7ac; cursor:pointer; font:inherit; padding:0; letter-spacing:.09em; }
+  #kPanel button.tx:hover { color:#141414; }
+  #kPanelT { transition:color .18s; }
+  #kPanelT svg { transition:transform .4s ease; }
+  #kPanelT:hover svg { transform:rotate(60deg); }
+  @media (max-width: 880px) {
+    #kSvg { width:calc(min(94vw, 62vh) * var(--pk, 1)) !important; margin-right:0 !important; margin-left:calc(min(94vw, 62vh) * (1 - var(--pk, 1)) * 0.125) !important; justify-self:center !important; align-self:start !important; margin-top:17vh !important; }
+    #kCopy { left:50% !important; top:6vh !important; transform:translate(-50%, 0) !important; justify-items:center !important; gap:20px !important; text-align:center !important; max-width:92vw !important; }
+    #kCopy h1 { font-size:clamp(40px, 13vw, 68px) !important; }
+    #kNav { display:none !important; }
+    #kPanel { left:calc(50% + min(94vw, 62vh) * 0.0625) !important; right:auto !important; bottom:auto !important; top:min(calc(17vh + min(94vw, 62vh) * var(--pk, 1) * 0.5625 + 14px), calc(100vh - 44px)) !important; transform:translateX(-50%) !important; }
+    #kPanelB { width:min(336px, 92vw) !important; }
+    #kCols { grid-template-columns:1fr 1fr !important; gap:12px 16px !important; }
+  }
+</style>
+</helmet>
+<div id="kStage" style="--pw:min(60vw, 114vh, (100vh - 230px) * 1.33); --pk:1; --mr:calc(min(9vw, 128px) + clamp(0px, (100vw - 1100px) * 0.34, 140px)); position:fixed; inset:0; background:#fbfbfa; display:grid; place-items:center; overflow:hidden; touch-action:none; cursor:default;">
+
+  <svg id="kSvg" viewBox="0 0 960 720" style="width:calc(var(--pw) * var(--pk)); transition:width .3s cubic-bezier(.22,.61,.36,1), margin-right .3s cubic-bezier(.22,.61,.36,1); height:auto; display:block; justify-self:end; margin-right:calc(var(--mr) + var(--pw) * (1 - var(--pk)) * 0.4375);" aria-label="A drawn portrait that watches your cursor">
+    <defs>
+      <clipPath id="kFaceClip" clipPathUnits="userSpaceOnUse"><path id="kFaceClipP" d="M -31.5 -174.8 C -37 -173 -52.68 -168.22 -60.5 -164.7 C -68.32 -161.18 -72.53 -158.33 -78.4 -153.7 C -84.27 -149.07 -90.13 -143.47 -95.7 -136.9 C -101.27 -130.33 -107.97 -120.98 -111.8 -114.3 C -115.63 -107.62 -118.05 -101.53 -118.7 -96.8 C -119.35 -92.07 -115.82 -93.97 -115.7 -85.9 C -115.58 -77.83 -117.13 -56.1 -118 -48.4 C -118.87 -40.7 -121.05 -43.85 -120.9 -39.7 C -120.75 -35.55 -117.23 -27.27 -117.1 -23.5 C -116.97 -19.73 -119.85 -18.58 -120.1 -17.1 C -120.35 -15.62 -119.52 -15 -118.6 -14.6 C -117.68 -14.2 -115.9 -15.13 -114.6 -14.7 C -113.3 -14.27 -112.88 -14.53 -110.8 -12 C -108.72 -9.47 -104.57 -4.4 -102.1 0.5 C -99.63 5.4 -98.97 6.63 -96 17.4 C -93.03 28.17 -87.18 55 -84.3 65.1 C -81.42 75.2 -81.18 73.68 -78.7 78 C -76.22 82.32 -74.12 85.85 -69.4 91 C -64.68 96.15 -56.92 103.65 -50.4 108.9 C -43.88 114.15 -36.57 119.18 -30.3 122.5 C -24.03 125.82 -19.42 127.77 -12.8 128.8 C -6.18 129.83 2.48 129.63 9.4 128.7 C 16.32 127.77 21.77 125.97 28.7 123.2 C 35.63 120.43 43.82 116.6 51 112.1 C 58.18 107.6 66.55 101 71.8 96.2 C 77.05 91.4 78.87 90.07 82.5 83.3 C 86.13 76.53 90.32 69.12 93.6 55.6 C 96.88 42.08 100.07 12.03 102.2 2.2 C 104.33 -7.63 105.12 -0.75 106.4 -3.4 C 107.68 -6.05 107.53 -10.85 109.9 -13.7 C 112.27 -16.55 118.93 -18.6 120.6 -20.5 C 122.27 -22.4 120.65 -23.82 119.9 -25.1 C 119.15 -26.38 116.82 -27.15 116.1 -28.2 C 115.38 -29.25 114.88 -25.52 115.6 -31.4 C 116.32 -37.28 120.32 -56.93 120.4 -63.5 C 120.48 -70.07 117.52 -65.48 116.1 -70.8 C 114.68 -76.12 113.52 -88.28 111.9 -95.4 C 110.28 -102.52 108.77 -107.6 106.4 -113.5 C 104.03 -119.4 105.7 -124.1 97.7 -130.8 C 89.7 -137.5 66.68 -148.28 58.4 -153.7 C 50.12 -159.12 51.27 -160.88 48 -163.3 C 44.73 -165.72 46.28 -166.23 38.8 -168.2 C 31.32 -170.17 14.15 -173.88 3.1 -175.1 C -7.95 -176.32 -21.73 -175.55 -27.5 -175.5 C -33.27 -175.45 -26 -176.6 -31.5 -174.8 Z"></path></clipPath>
+      <clipPath id="kNeckClip" clipPathUnits="userSpaceOnUse"><path id="kNeckClipP" d="M -37.5 0 L 24.7 0 L 57.7 195 L -75.9 195 Z"></path></clipPath>
+      <filter id="kDs" x="-40%" y="-40%" width="180%" height="180%">
+        <feDropShadow dx="-1.5" dy="5" stdDeviation="1.4" flood-color="#c9cbd1" flood-opacity="0.8"></feDropShadow>
+      </filter>
+    </defs>
+
+    <g transform="translate(540,346)">
+
+      <g id="kNeck">
+        <path id="kNeckFill" d="M -50 40 L 36 40 L 60 182 Q -9 205 -78 182 Z" fill="#ffffff"></path>
+        <path id="kNeckL" d="M -50 40 L -78 182" fill="none" stroke="#141414" stroke-width="9" stroke-linecap="round"></path>
+        <path id="kNeckR" d="M 36 40 L 60 182" fill="none" stroke="#141414" stroke-width="9" stroke-linecap="round"></path>
+      </g>
+
+      <g clip-path="url(#kNeckClip)">
+        <g id="kChinHead" style="will-change:transform;">
+          <g id="kChinSh" data-sh="1" style="will-change:transform;">
+            <path transform="translate(0 4) scale(1 1.14)" fill="#e2e3e7" d="M -31.5 -174.8 C -37 -173 -52.68 -168.22 -60.5 -164.7 C -68.32 -161.18 -72.53 -158.33 -78.4 -153.7 C -84.27 -149.07 -90.13 -143.47 -95.7 -136.9 C -101.27 -130.33 -107.97 -120.98 -111.8 -114.3 C -115.63 -107.62 -118.05 -101.53 -118.7 -96.8 C -119.35 -92.07 -115.82 -93.97 -115.7 -85.9 C -115.58 -77.83 -117.13 -56.1 -118 -48.4 C -118.87 -40.7 -121.05 -43.85 -120.9 -39.7 C -120.75 -35.55 -117.23 -27.27 -117.1 -23.5 C -116.97 -19.73 -119.85 -18.58 -120.1 -17.1 C -120.35 -15.62 -119.52 -15 -118.6 -14.6 C -117.68 -14.2 -115.9 -15.13 -114.6 -14.7 C -113.3 -14.27 -112.88 -14.53 -110.8 -12 C -108.72 -9.47 -104.57 -4.4 -102.1 0.5 C -99.63 5.4 -98.97 6.63 -96 17.4 C -93.03 28.17 -87.18 55 -84.3 65.1 C -81.42 75.2 -81.18 73.68 -78.7 78 C -76.22 82.32 -74.12 85.85 -69.4 91 C -64.68 96.15 -56.92 103.65 -50.4 108.9 C -43.88 114.15 -36.57 119.18 -30.3 122.5 C -24.03 125.82 -19.42 127.77 -12.8 128.8 C -6.18 129.83 2.48 129.63 9.4 128.7 C 16.32 127.77 21.77 125.97 28.7 123.2 C 35.63 120.43 43.82 116.6 51 112.1 C 58.18 107.6 66.55 101 71.8 96.2 C 77.05 91.4 78.87 90.07 82.5 83.3 C 86.13 76.53 90.32 69.12 93.6 55.6 C 96.88 42.08 100.07 12.03 102.2 2.2 C 104.33 -7.63 105.12 -0.75 106.4 -3.4 C 107.68 -6.05 107.53 -10.85 109.9 -13.7 C 112.27 -16.55 118.93 -18.6 120.6 -20.5 C 122.27 -22.4 120.65 -23.82 119.9 -25.1 C 119.15 -26.38 116.82 -27.15 116.1 -28.2 C 115.38 -29.25 114.88 -25.52 115.6 -31.4 C 116.32 -37.28 120.32 -56.93 120.4 -63.5 C 120.48 -70.07 117.52 -65.48 116.1 -70.8 C 114.68 -76.12 113.52 -88.28 111.9 -95.4 C 110.28 -102.52 108.77 -107.6 106.4 -113.5 C 104.03 -119.4 105.7 -124.1 97.7 -130.8 C 89.7 -137.5 66.68 -148.28 58.4 -153.7 C 50.12 -159.12 51.27 -160.88 48 -163.3 C 44.73 -165.72 46.28 -166.23 38.8 -168.2 C 31.32 -170.17 14.15 -173.88 3.1 -175.1 C -7.95 -176.32 -21.73 -175.55 -27.5 -175.5 C -33.27 -175.45 -26 -176.6 -31.5 -174.8 Z"></path>
+          </g>
+        </g>
+      </g>
+
+      <g id="kHead" style="will-change:transform;">
+
+        <g id="kFace" style="will-change:transform;">
+          <path d="M -31.5 -174.8 C -37 -173 -52.68 -168.22 -60.5 -164.7 C -68.32 -161.18 -72.53 -158.33 -78.4 -153.7 C -84.27 -149.07 -90.13 -143.47 -95.7 -136.9 C -101.27 -130.33 -107.97 -120.98 -111.8 -114.3 C -115.63 -107.62 -118.05 -101.53 -118.7 -96.8 C -119.35 -92.07 -115.82 -93.97 -115.7 -85.9 C -115.58 -77.83 -117.13 -56.1 -118 -48.4 C -118.87 -40.7 -121.05 -43.85 -120.9 -39.7 C -120.75 -35.55 -117.23 -27.27 -117.1 -23.5 C -116.97 -19.73 -119.85 -18.58 -120.1 -17.1 C -120.35 -15.62 -119.52 -15 -118.6 -14.6 C -117.68 -14.2 -115.9 -15.13 -114.6 -14.7 C -113.3 -14.27 -112.88 -14.53 -110.8 -12 C -108.72 -9.47 -104.57 -4.4 -102.1 0.5 C -99.63 5.4 -98.97 6.63 -96 17.4 C -93.03 28.17 -87.18 55 -84.3 65.1 C -81.42 75.2 -81.18 73.68 -78.7 78 C -76.22 82.32 -74.12 85.85 -69.4 91 C -64.68 96.15 -56.92 103.65 -50.4 108.9 C -43.88 114.15 -36.57 119.18 -30.3 122.5 C -24.03 125.82 -19.42 127.77 -12.8 128.8 C -6.18 129.83 2.48 129.63 9.4 128.7 C 16.32 127.77 21.77 125.97 28.7 123.2 C 35.63 120.43 43.82 116.6 51 112.1 C 58.18 107.6 66.55 101 71.8 96.2 C 77.05 91.4 78.87 90.07 82.5 83.3 C 86.13 76.53 90.32 69.12 93.6 55.6 C 96.88 42.08 100.07 12.03 102.2 2.2 C 104.33 -7.63 105.12 -0.75 106.4 -3.4 C 107.68 -6.05 107.53 -10.85 109.9 -13.7 C 112.27 -16.55 118.93 -18.6 120.6 -20.5 C 122.27 -22.4 120.65 -23.82 119.9 -25.1 C 119.15 -26.38 116.82 -27.15 116.1 -28.2 C 115.38 -29.25 114.88 -25.52 115.6 -31.4 C 116.32 -37.28 120.32 -56.93 120.4 -63.5 C 120.48 -70.07 117.52 -65.48 116.1 -70.8 C 114.68 -76.12 113.52 -88.28 111.9 -95.4 C 110.28 -102.52 108.77 -107.6 106.4 -113.5 C 104.03 -119.4 105.7 -124.1 97.7 -130.8 C 89.7 -137.5 66.68 -148.28 58.4 -153.7 C 50.12 -159.12 51.27 -160.88 48 -163.3 C 44.73 -165.72 46.28 -166.23 38.8 -168.2 C 31.32 -170.17 14.15 -173.88 3.1 -175.1 C -7.95 -176.32 -21.73 -175.55 -27.5 -175.5 C -33.27 -175.45 -26 -176.6 -31.5 -174.8 Z" fill="#ffffff" stroke="#141414" stroke-width="9" stroke-linejoin="round"></path>
+        </g>
+
+        <g id="kFeatShHost" style="will-change:transform;">
+          <g clip-path="url(#kFaceClip)">
+            <g id="kFeatShIn">
+              <g id="kFeatShOff" data-sh="1" transform="translate(-1.4 5.4)" fill="none" stroke="#d9dbe0">
+            <path d="M -8 -24 C -2 -33 7 -33 14 -22" stroke-width="7" stroke-linecap="round"></path>
+            <circle cx="-46.1" cy="-16.9" r="38.5" stroke-width="7.5"></circle>
+            <circle cx="48.1" cy="-11.4" r="36" stroke-width="7.5"></circle>
+          </g>
+            </g>
+          </g>
+        </g>
+
+        <g id="kEarL" transform="translate(-99 0)" style="will-change:transform;"><path d="M -18.3 -20.5 C -23.7 -15.3 -26.3 -5.2 -25.3 5.2 C -23.5 19.8 -15.7 27.1 -7 25 C -2.6 22.9 0 17.7 -1.8 10.4" fill="#ffffff" stroke="#141414" stroke-width="7.5" stroke-linecap="round"></path></g>
+        <g id="kEarR" transform="translate(107 0)" style="will-change:transform;"><path d="M 18.3 -20.5 C 23.7 -15.3 26.3 -5.2 25.3 5.2 C 23.5 19.8 15.7 27.1 7 25 C 2.6 22.9 0 17.7 1.8 10.4" fill="#ffffff" stroke="#141414" stroke-width="7.5" stroke-linecap="round"></path></g>
+
+        <g id="kHairClip" clip-path="url(#kFaceClip)">
+          <g id="kHairSh" data-sh="1" style="will-change:transform;">
+            <path id="kHairShP" transform="translate(-1.4 5.4)" fill="#d9dbe0" stroke="#d9dbe0" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" d="M -100 6 L -127 -80 L -92 -160 L -12 -191 L 70 -162 L 124 -92 L 119 4 L 95 -4 L 82 -44 L 70 -93 L 22 -114 L -42 -81 L -48 -98 L -61 -77 L -67 -94 L -78 -69 L -88 -38 Z"></path>
+          </g>
+        </g>
+
+        <g id="kHair" style="will-change:transform;">
+          <path id="kHairP" fill="#141414" stroke="#141414" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" d="M -100 6 L -127 -80 L -92 -160 L -12 -191 L 70 -162 L 124 -92 L 119 4 L 95 -4 L 82 -44 L 70 -93 L 22 -114 L -42 -81 L -48 -98 L -61 -77 L -67 -94 L -78 -69 L -88 -38 Z"></path>
+        </g>
+
+        <path id="kStemL" d="M -82.4 -20.9 L -107.3 -15.4" fill="none" stroke="#141414" stroke-width="7.5" stroke-linecap="butt" opacity="0"></path>
+        <path id="kStemR" d="M 81.9 -15.4 L 106.8 -9.9" fill="none" stroke="#141414" stroke-width="7.5" stroke-linecap="butt" opacity="0"></path>
+
+        <g id="kFaceLine" style="will-change:transform;">
+          <path d="M -31.5 -174.8 C -37 -173 -52.68 -168.22 -60.5 -164.7 C -68.32 -161.18 -72.53 -158.33 -78.4 -153.7 C -84.27 -149.07 -90.13 -143.47 -95.7 -136.9 C -101.27 -130.33 -107.97 -120.98 -111.8 -114.3 C -115.63 -107.62 -118.05 -101.53 -118.7 -96.8 C -119.35 -92.07 -115.82 -93.97 -115.7 -85.9 C -115.58 -77.83 -117.13 -56.1 -118 -48.4 C -118.87 -40.7 -121.05 -43.85 -120.9 -39.7 C -120.75 -35.55 -117.23 -27.27 -117.1 -23.5 C -116.97 -19.73 -119.85 -18.58 -120.1 -17.1 C -120.35 -15.62 -119.52 -15 -118.6 -14.6 C -117.68 -14.2 -115.9 -15.13 -114.6 -14.7 C -113.3 -14.27 -112.88 -14.53 -110.8 -12 C -108.72 -9.47 -104.57 -4.4 -102.1 0.5 C -99.63 5.4 -98.97 6.63 -96 17.4 C -93.03 28.17 -87.18 55 -84.3 65.1 C -81.42 75.2 -81.18 73.68 -78.7 78 C -76.22 82.32 -74.12 85.85 -69.4 91 C -64.68 96.15 -56.92 103.65 -50.4 108.9 C -43.88 114.15 -36.57 119.18 -30.3 122.5 C -24.03 125.82 -19.42 127.77 -12.8 128.8 C -6.18 129.83 2.48 129.63 9.4 128.7 C 16.32 127.77 21.77 125.97 28.7 123.2 C 35.63 120.43 43.82 116.6 51 112.1 C 58.18 107.6 66.55 101 71.8 96.2 C 77.05 91.4 78.87 90.07 82.5 83.3 C 86.13 76.53 90.32 69.12 93.6 55.6 C 96.88 42.08 100.07 12.03 102.2 2.2 C 104.33 -7.63 105.12 -0.75 106.4 -3.4 C 107.68 -6.05 107.53 -10.85 109.9 -13.7 C 112.27 -16.55 118.93 -18.6 120.6 -20.5 C 122.27 -22.4 120.65 -23.82 119.9 -25.1 C 119.15 -26.38 116.82 -27.15 116.1 -28.2 C 115.38 -29.25 114.88 -25.52 115.6 -31.4 C 116.32 -37.28 120.32 -56.93 120.4 -63.5 C 120.48 -70.07 117.52 -65.48 116.1 -70.8 C 114.68 -76.12 113.52 -88.28 111.9 -95.4 C 110.28 -102.52 108.77 -107.6 106.4 -113.5 C 104.03 -119.4 105.7 -124.1 97.7 -130.8 C 89.7 -137.5 66.68 -148.28 58.4 -153.7 C 50.12 -159.12 51.27 -160.88 48 -163.3 C 44.73 -165.72 46.28 -166.23 38.8 -168.2 C 31.32 -170.17 14.15 -173.88 3.1 -175.1 C -7.95 -176.32 -21.73 -175.55 -27.5 -175.5 C -33.27 -175.45 -26 -176.6 -31.5 -174.8 Z" fill="none" stroke="#141414" stroke-width="9" stroke-linejoin="round"></path>
+        </g>
+
+        <g id="kClipHost" style="will-change:transform;">
+          <g clip-path="url(#kFaceClip)">
+            <g id="kFeatIn">
+              <circle cx="-46.1" cy="-16.9" r="38.5" fill="#ffffff"></circle>
+              <circle cx="48.1" cy="-11.4" r="36" fill="#ffffff"></circle>
+              <clipPath id="kLensL"><circle cx="-46.1" cy="-16.9" r="37.3"></circle></clipPath>
+              <clipPath id="kLensR"><circle cx="48.1" cy="-11.4" r="34.8"></circle></clipPath>
+              <g id="kBrows">
+                <path d="M -78 -57 C -66 -70 -30 -71 -16 -60" fill="none" stroke="#141414" stroke-width="8.5" stroke-linecap="round"></path>
+                <path d="M 17 -52 C 31 -65 66 -66 78 -53" fill="none" stroke="#141414" stroke-width="8.5" stroke-linecap="round"></path>
+              </g>
+
+              <g id="kMouth">
+                <path id="kMouthP" d="M -30.5 60.6 C -9.1 65.7 11.3 62.8 30.5 52.0" fill="none" stroke="#141414" stroke-width="6.8" stroke-linecap="butt"></path>
+              </g>
+            </g>
+          </g>
+        </g>
+
+        <g id="kFeat" style="will-change:transform;">
+          <path d="M -8 -24 C -2 -33 7 -33 14 -22" fill="none" stroke="#141414" stroke-width="7" stroke-linecap="round"></path>
+          <circle cx="-46.1" cy="-16.9" r="38.5" fill="none" stroke="#141414" stroke-width="7.5"></circle>
+          <circle cx="48.1" cy="-11.4" r="36" fill="none" stroke="#141414" stroke-width="7.5"></circle>
+          <g id="kPupL" transform="translate(-41.1 -27.9)"><ellipse rx="7" ry="7.5" fill="#141414"></ellipse></g>
+          <g id="kPupR" transform="translate(43.1 -22.4)"><ellipse rx="7" ry="7.5" fill="#141414"></ellipse></g>
+        </g>
+
+        <g id="kNoseHost" style="will-change:transform;">
+          <g clip-path="url(#kFaceClip)">
+            <g id="kNoseIn">
+              <g id="kNose" transform="translate(0 -2)">
+                <path id="kNoseC" d="M 0 -10.8 L 0 31.4" fill="#ffffff" stroke="#141414" stroke-width="6.6" stroke-linecap="round" stroke-linejoin="round"></path>
+              </g>
+            </g>
+          </g>
+        </g>
+
+        </g>
+
+      </g>
+    </g>
+  </svg>
+
+  <div id="kCopy" style="position:fixed; left:min(11vw, 168px); top:50%; transform:translateY(-50%); z-index:2; display:grid; gap:clamp(24px, 2.8vw, 40px); justify-items:start; max-width:min(44vw, 560px); pointer-events:none;">
+    <h1 id="kHi" style="margin:0; font-family:'Instrument Sans', Helvetica, sans-serif; font-weight:500; font-size:clamp(38px, min(6.5vw, 11.8vh), 116px); line-height:0.94; letter-spacing:-0.03em; color:#141414; text-wrap:balance;">eric liu</h1>
+    <div id="kSocial" style="display:flex; gap:1.6em; align-items:center; pointer-events:auto; font-family:'Space Grotesk', Helvetica, sans-serif; font-weight:500; font-size:clamp(14px, min(1.3vw, 2.3vh), 22px); letter-spacing:-0.01em;">
+      <a href="https://www.linkedin.com/in/erictliu" target="_blank" rel="noopener" style="display:inline-flex; align-items:center; gap:9px; color:#141414;" style-hover="color:#5a5c63;">
+        <svg viewBox="0 0 20 20" style="width:1.15em; height:1.15em; display:block;" aria-hidden="true"><rect id="kLiTile" x="0.5" y="0.5" width="19" height="19" rx="3.4" fill="#141414"></rect><g id="kLiIn" fill="#fbfbfa"><rect x="4" y="8" width="2.6" height="8"></rect><rect x="4" y="4.1" width="2.6" height="2.6"></rect><path d="M8.4 16 V8 h2.5 v1 c0.7 -0.9 1.7 -1.2 2.7 -1.2 c1.7 0 2.9 1.1 2.9 3.2 V16 h-2.6 v-4.4 c0 -1 -0.4 -1.6 -1.3 -1.6 c-0.9 0 -1.5 0.6 -1.5 1.7 V16 Z"></path></g></svg>
+        LinkedIn</a>
+      <a href="https://x.com/erictliu" target="_blank" rel="noopener" style="display:inline-flex; align-items:center; gap:9px; color:#141414;" style-hover="color:#5a5c63;">
+        <svg viewBox="0 0 20 20" style="width:1.15em; height:1.15em; display:block;" aria-hidden="true"><rect id="kXm" x="0.5" y="0.5" width="19" height="19" rx="3.4" fill="#141414"></rect><g id="kXIn" fill="#fbfbfa"><path d="M3.9 4 H6.6 L16.1 16 H13.4 Z M13.6 4 H16.1 L6.4 16 H3.9 Z"></path></g></svg>
+        x.com</a>
+    </div>
+  </div>
+
+  <nav id="kNav" style="position:fixed; right:min(3.4vw, 46px); top:50%; transform:translateY(-50%); z-index:2; display:grid; gap:15px; justify-items:end; font:clamp(13px, min(1.2vw, 2.2vh), 24px)/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing:.19em; color:#a6a7ac;">
+    <a id="kEnter" href="#" style="color:#a6a7ac; transition:color .16s;" style-hover="color:#141414;">ENTER</a>
+  </nav>
+
+  <div id="kPanel" style="position:fixed; right:calc(var(--mr) + var(--pw) * 0.4375); transform:translateX(50%); top:min(calc(50% + var(--pw) * var(--pk) * 0.215), calc(100vh - 44px)); transition:top .3s cubic-bezier(.22,.61,.36,1), right .3s cubic-bezier(.22,.61,.36,1); z-index:3; width:max-content; display:grid; justify-items:stretch; font:10px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing:.07em; color:#8a8b90; gap:12px; user-select:none; backdrop-filter:blur(7px);">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <button id="kPanelT" type="button" class="tx" style="box-sizing:border-box; display:flex; align-items:center; justify-content:center; gap:9px; width:100%; padding:8px 12px; color:#9a9b9f; font-size:clamp(11px, min(1vw, 1.9vh), 17px); letter-spacing:.15em; cursor:pointer;"><svg viewBox="0 0 24 24" style="width:1.4em; height:1.4em; display:block;" aria-hidden="true"><circle cx="12" cy="12" r="5.4" fill="none" stroke="currentColor" stroke-width="2.2"></circle><g stroke="currentColor" stroke-width="2.8"><path d="M12 5 V2.4"></path><path d="M12 19 V21.6"></path><path d="M5 12 H2.4"></path><path d="M19 12 H21.6"></path><path d="M7.05 7.05 L5.2 5.2"></path><path d="M16.95 16.95 L18.8 18.8"></path><path d="M16.95 7.05 L18.8 5.2"></path><path d="M7.05 16.95 L5.2 18.8"></path></g></svg>PLAY</button>
+    </div>
+    <div id="kPanelB" style="display:none; box-sizing:border-box; gap:10px; position:absolute; top:calc(100% + 9px); left:50%; transform:translateX(-50%); width:min(452px, 88vw); padding:12px 14px 13px; background:rgba(255,255,255,.94); border:1px solid #e2e1dc; border-radius:11px; backdrop-filter:blur(7px); box-shadow:0 8px 30px rgba(20,20,20,.07); max-height:calc(100vh - 120px); overflow:auto;">
+      <div id="kBar" style="display:flex; flex-wrap:wrap; align-items:center; gap:8px; font:10px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing:.09em; color:#a6a7ac; user-select:none;">
+        <button id="kDance" type="button" data-on="0" style="flex:1 1 122px; white-space:nowrap;">DANCE MODE</button><label style="display:flex; align-items:center; justify-content:center; gap:7px; flex:0 1 auto; padding:4px 11px; border:1px solid #e2e1dc; border-radius:999px; color:#a6a7ac; cursor:pointer; white-space:nowrap;"><span>IDLE LIFE</span><input type="checkbox" data-p="idleLife" style="accent-color:#141414; width:12px; height:12px; margin:0; cursor:pointer;"></label><button id="kShuffle" type="button">SHUFFLE</button><button id="kReset" type="button">RESET</button>
+        <span style="display:none;"><button id="kLegacy" type="button" data-on="0">OLD RIG</button><button id="kStats" type="button" data-on="0">FPS</button><span id="kReadout">bezier rig</span></span>
+      </div>
+      <div id="kCols" style="display:grid; grid-template-columns:repeat(3, 1fr); gap:11px 20px; align-items:start;">
+      <div style="display:grid; gap:11px; align-content:start;">
+      <label style="display:grid; gap:5px;">
+        <span style="display:flex; justify-content:space-between;"><span>TRAVEL</span><span data-out="travel" style="color:#141414;">76</span></span>
+        <input type="range" data-p="travel" min="40" max="170" step="2" style="accent-color:#141414;">
+      </label>
+      <label style="display:grid; gap:5px;">
+        <span style="display:flex; justify-content:space-between;"><span>RESPONSE</span><span data-out="responsiveness" style="color:#141414;">1.75</span></span>
+        <input type="range" data-p="responsiveness" min="0.6" max="4" step="0.05" style="accent-color:#141414;">
+      </label>
+      <label style="display:grid; gap:5px;">
+        <span style="display:flex; justify-content:space-between;"><span>SPRING</span><span data-out="springiness" style="color:#141414;">0.90</span></span>
+        <input type="range" data-p="springiness" min="0" max="1" step="0.05" style="accent-color:#141414;">
+      </label>
+      </div>
+      <div style="display:grid; gap:11px; align-content:start;">
+      <label style="display:grid; gap:5px;">
+        <span style="display:flex; justify-content:space-between;"><span>ROLL</span><span data-out="roll" style="color:#141414;">6</span></span>
+        <input type="range" data-p="roll" min="0" max="14" step="0.5" style="accent-color:#141414;">
+      </label>
+      <label style="display:grid; gap:5px;">
+        <span style="display:flex; justify-content:space-between;"><span>HAIR WRAP</span><span data-out="hairWrap" style="color:#141414;">1.00</span></span>
+        <input type="range" data-p="hairWrap" min="0" max="1.6" step="0.05" style="accent-color:#141414;">
+      </label>
+      <label style="display:grid; gap:5px;">
+        <span style="display:flex; justify-content:space-between;"><span>UP / DOWN</span><span data-out="pitchDepth" style="color:#141414;">0.62</span></span>
+        <input type="range" data-p="pitchDepth" min="0.15" max="1.2" step="0.01" style="accent-color:#141414;">
+      </label>
+      </div>
+      <div style="display:grid; gap:11px; align-content:start;">
+      <div id="kSwatches" style="display:grid; gap:11px; align-content:start;">
+      <div style="display:grid; gap:6px;"><span>INK</span><div style="display:flex; gap:7px;"><button type="button" class="sw" data-c="inkColor" data-v="#141414" data-on="1" style="background:#141414;" aria-label="#141414"></button><button type="button" class="sw" data-c="inkColor" data-v="#1b2a4a" data-on="0" style="background:#1b2a4a;" aria-label="#1b2a4a"></button><button type="button" class="sw" data-c="inkColor" data-v="#3b2415" data-on="0" style="background:#3b2415;" aria-label="#3b2415"></button><button type="button" class="sw" data-c="inkColor" data-v="#123326" data-on="0" style="background:#123326;" aria-label="#123326"></button></div></div>
+      <div style="display:grid; gap:6px;"><span>BACKGROUND</span><div style="display:flex; gap:7px;"><button type="button" class="sw" data-c="bgColor" data-v="#fbfbfa" data-on="1" style="background:#fbfbfa;" aria-label="#fbfbfa"></button><button type="button" class="sw" data-c="bgColor" data-v="#e8e6e1" data-on="0" style="background:#e8e6e1;" aria-label="#e8e6e1"></button><button type="button" class="sw" data-c="bgColor" data-v="#f2ece4" data-on="0" style="background:#f2ece4;" aria-label="#f2ece4"></button><button type="button" class="sw" data-c="bgColor" data-v="#e6ecec" data-on="0" style="background:#e6ecec;" aria-label="#e6ecec"></button></div></div>
+      </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;travel&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:76,&quot;min&quot;:40,&quot;max&quot;:170,&quot;step&quot;:2,&quot;unit&quot;:&quot;px&quot;,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Motion&quot;},&quot;responsiveness&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:1.75,&quot;min&quot;:0.6,&quot;max&quot;:4,&quot;step&quot;:0.05,&quot;unit&quot;:&quot;Hz&quot;,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Motion&quot;},&quot;springiness&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:0.9,&quot;min&quot;:0,&quot;max&quot;:1,&quot;step&quot;:0.05,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Motion&quot;},&quot;roll&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:6,&quot;min&quot;:0,&quot;max&quot;:14,&quot;step&quot;:0.5,&quot;unit&quot;:&quot;deg&quot;,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Motion&quot;},&quot;pitchDepth&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:0.62,&quot;min&quot;:0.15,&quot;max&quot;:1.2,&quot;step&quot;:0.01,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Motion&quot;},&quot;hairWrap&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:1,&quot;min&quot;:0,&quot;max&quot;:1.6,&quot;step&quot;:0.05,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Motion&quot;},&quot;idleLife&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Behavior&quot;},&quot;headlineFont&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;Instrument Sans&quot;,&quot;options&quot;:[&quot;Instrument Sans&quot;,&quot;Space Grotesk&quot;,&quot;Gabarito&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Look&quot;},&quot;showControls&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Behavior&quot;}}">
+const TAU = 6.283185307179586;
+const CL = (v, a, b) => (v < a ? a : v > b ? b : v);
+const SS = (a, b, v) => { const t = CL((v - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+const SOFT = (v, l) => l * Math.tanh(v / l);
+const softMin = (v, l, k) => { const z = (l - v) / k; return z > 30 ? v : l - k * Math.log1p(Math.exp(z)); };
+const softMax = (v, l, k) => -softMin(-v, -l, k);
+
+// Closed-form damped spring. Exact at any dt -> identical motion at 30/60/120/144Hz,
+// and it cannot blow up on a dropped frame.
+function Spring(f, z) { this.w = TAU * f; this.z = z; this.x = 0; this.v = 0; }
+Spring.prototype.tune = function (f, z) { this.w = TAU * f; this.z = z; };
+Spring.prototype.step = function (t, dt) {
+  const w = this.w, z = this.z, x = this.x - t, v = this.v;
+  if (z < 0.9999) {
+    const wd = w * Math.sqrt(1 - z * z), e = Math.exp(-z * w * dt);
+    const c = Math.cos(wd * dt), s = Math.sin(wd * dt);
+    const A = x, B = (v + z * w * x) / wd;
+    this.x = e * (A * c + B * s) + t;
+    this.v = e * ((B * wd - z * w * A) * c - (A * wd + z * w * B) * s);
+  } else {
+    const e = Math.exp(-w * dt), A = x, B = v + w * x;
+    this.x = (A + B * dt) * e + t;
+    this.v = (B - w * (A + B * dt)) * e;
+  }
+  return this.x;
+};
+// the original rig's integrator, kept only for the A/B toggle
+function Euler(st, da) { this.st = st; this.da = da; this.x = 0; this.v = 0; }
+Euler.prototype.step = function (g, dt) {
+  this.v += (g - this.x) * this.st * dt; this.v *= Math.exp(-this.da * dt); this.x += this.v * dt; return this.x;
+};
+
+const LX = -46.1, LY = -16.9, RX = 48.1, RY = -11.4;   // v1 lens geometry: left bigger + higher
+const NOSE = [-5.3, -7.4, 0.8, -9.2, 6.7, -6.3, 11.1, 0.3, 12.6, 9.0, 11.1, 17.7, 6.7, 24.3, 0.8, 27.2, -5.3, 25.4];
+// ---------------------------------------------------------------------------
+// HAIR, v4: the standard vector-illustration construction. The whole haircut is ONE
+// closed cubic-Bezier shape drawn through 17 anchor points -- dome over the skull
+// (overhanging the outline slightly, like ink over the edge), then the hairline back
+// across the forehead. Anchors flagged as corners keep sharp tips; the rest get
+// Catmull-Rom handles, so the curve stays smooth however the points move. Three keyed
+// poses (L / C / R) store just those 17 points each; a turn lerps the points and
+// re-emits one path string. Dome anchors (1..5) are identical in all keys -- the skull
+// never changes, only the hairline map moves.
+const CORNER = [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 1, 1, 0, 0, 1, 1];
+// 23 anchors: 0 = L sideburn tip, 1-5 dome (fixed skull), 6 R silhouette above ear,
+// 7 R sideburn front, 8 hook return, 9 hook/wisp tip (reaches the lens edge on the
+// trailing side of a turn), 10-11 strip inner edge (hugs the silhouette), 12 part /
+// strip top, 13 fringe bulk, 14-18 fringe tips/notches, 19 L wall / strip top,
+// 20 L strip mid, 21 L hook tip, 22 L sideburn front. Trailing side of a turn =
+// thin edge strip + inboard wisp; inserts are collinear in C so frontal is unchanged.
+const HAIR = {
+  C: [[-104, 7], [-127, -80], [-92, -167], [-12, -191], [62, -168], [98, -133], [124, -94], [118, 0], [101, 6], [98, -8], [95, -19], [91, -30], [86, -66], [74, -101], [22, -122], [-42, -89], [-48, -106], [-61, -85], [-67, -102], [-78, -77], [-88, -62], [-90, -44], [-92, -30], [-92, -20]],
+  L: [[-104, 6], [-127, -80], [-92, -171], [6, -190], [78, -172], [108, -141], [126, -98], [110, -14], [92, 0], [88, -12], [86, -24], [84, -38], [82, -58], [90, -92], [0, -110], [-58, -74], [-62, -92], [-74, -70], [-79, -88], [-86, -66], [-97, -52], [-99, -38], [-87, -26], [-88, -16]],
+  R: [[-106, 6], [-129, -84], [-104, -166], [10, -191], [84, -172], [110, -140], [124, -96], [104, -8], [88, 0], [84, -14], [88, -26], [94, -38], [100, -58], [108, -95], [48, -104], [8, -80], [0, -96], [-16, -78], [-24, -94], [-44, -74], [-84, -56], [-86, -36], [-90, -17], [-93, -6]]
+};
+function hairD(w) {
+  const t = Math.abs(w), K = w < 0 ? HAIR.L : HAIR.R, C = HAIR.C, n = C.length;
+  const P = C.map((p, i) => [p[0] + (K[i][0] - p[0]) * t, p[1] + (K[i][1] - p[1]) * t]);
+  let d = 'M ' + P[0][0].toFixed(1) + ' ' + P[0][1].toFixed(1);
+  for (let i = 0; i < n; i++) {
+    const p0 = P[(i + n - 1) % n], p1 = P[i], p2 = P[(i + 1) % n], p3 = P[(i + 2) % n];
+    const c1 = CORNER[i] ? p1 : [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6];
+    const c2 = CORNER[(i + 1) % n] ? p2 : [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
+    d += ' C ' + c1[0].toFixed(1) + ' ' + c1[1].toFixed(1) + ' ' + c2[0].toFixed(1) + ' ' + c2[1].toFixed(1) + ' ' + p2[0].toFixed(1) + ' ' + p2[1].toFixed(1);
+  }
+  return d + ' Z';
+}
+// yaw saturates near 0.75, so normalise before driving anything that should reach its
+// full authored value at full turn.
+const UMAX = 0.75;
+const EAR = [['M', [-15.6, -17.4]], ['C', [-20.1, -13, -22.4, -4.4, -21.5, 4.4]],
+  ['C', [-20, 16.8, -13.3, 23, -6, 21.3]], ['C', [-2.2, 19.5, 0, 15, -1.5, 8.8]]];
+const IDS = ['kStage','kSvg','kHead','kFace','kFaceLine','kHair','kHairSh','kChinSh','kChinHead','kClipHost','kFeatIn','kFeat','kFeatShHost','kFeatShIn',
+  'kEarL','kEarR','kStemL','kStemR','kBrows','kFeatShOff','kNose','kNoseC','kNoseHost','kNoseIn','kMouth','kMouthP','kPupL','kPupR',
+  'kNeckL','kNeckR','kNeckFill','kReset','kNeckClipP','kHairClip','kHairP','kHairShP','kLegacy','kStats','kReadout','kBar','kDance'];
+
+// Background music for DANCE MODE. Put an audio file next to index.html and
+// point `src` at it — .mp3, .m4a and .ogg all work. `bpm` is the track's tempo
+// and only drives how fast the head bops, so set it to match. If `src` is empty
+// or the file will not play, the built-in synth beat is used instead.
+const MUSIC = { src: './music.mp3', bpm: 96, volume: 0.55 };
+
+const WORDS = ['ENTER', 'GET READY', 'STAY AWAY', 'PLZ DON\u2019T CLICK', 'BOOP', 'LOOK AWAY', 'PROB NOTHING HERE', 'GO ON THEN', 'PSST', 'LOOK HERE', 'DON\u2019T CLICK', 'OH HI'];
+const PAIRS = [
+  ['#141414', '#fbfbfa'], ['#141414', '#e8e6e1'], ['#1b2a4a', '#eef1f4'], ['#1b2a4a', '#fbfbfa'],
+  ['#3b2415', '#f2efe8'], ['#3b2415', '#e8e6e1'], ['#123326', '#e8e6e1'], ['#123326', '#eef1f4']
+];
+
+class Component extends DCLogic {
+  componentDidMount() { this.dead = false; this.booted = false; this.boot(); }
+
+  shuffle() {
+    const t = this.theme || {}, cur = (t.ink || '') + (t.bg || '');
+    let p = PAIRS[0], n = 0;
+    do { p = PAIRS[Math.floor(Math.random() * PAIRS.length)]; } while (p[0] + p[1] === cur && ++n < 12);
+    this.theme = { ink: p[0], bg: p[1] };
+    this.applyTheme(); this.syncPanel();
+  }
+
+  toggleDance() {
+    this.dance = !this.dance;
+    this.danceT0 = performance.now() / 1000;
+    const b = this.e && this.e.kDance;
+    if (b) b.setAttribute('data-on', this.dance ? '1' : '0');
+    if (this.dance) this.startBeat(); else this.stopBeat();
+  }
+
+  startBeat() {
+    if (MUSIC.src) this.startTrack(); else this.startSynth();
+  }
+
+  startTrack() {
+    const fallback = () => { this.track = null; if (this.dance) this.startSynth(); };
+    try {
+      let el = this.track;
+      if (!el) {
+        el = this.track = new Audio(MUSIC.src);
+        el.loop = true; el.preload = 'auto'; el.volume = MUSIC.volume;
+        el.addEventListener('error', fallback, { once: true });
+      }
+      el.currentTime = 0;
+      const p = el.play();
+      if (p && p.catch) p.catch(fallback);
+    } catch (err) { fallback(); }
+  }
+
+  startSynth() {
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      if (!this.audio) this.audio = new AC();
+      const ac = this.audio;
+      if (ac.state === 'suspended') ac.resume();
+      const bus = ac.createGain(); bus.gain.value = 0.15; bus.connect(ac.destination);
+      this.bus = bus;
+      const BEAT = 60 / MUSIC.bpm;
+      const kick = (t) => {
+        const o = ac.createOscillator(), g = ac.createGain();
+        o.frequency.setValueAtTime(155, t); o.frequency.exponentialRampToValueAtTime(46, t + 0.11);
+        g.gain.setValueAtTime(0.9, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+        o.connect(g); g.connect(bus); o.start(t); o.stop(t + 0.22);
+      };
+      const hat = (t) => {
+        const buf = ac.createBuffer(1, 1100, ac.sampleRate), d = buf.getChannelData(0);
+        for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 2);
+        const src = ac.createBufferSource(); src.buffer = buf;
+        const f = ac.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 7500;
+        const g = ac.createGain(); g.gain.value = 0.3;
+        src.connect(f); f.connect(g); g.connect(bus); src.start(t);
+      };
+      const bass = (t, hz) => {
+        const o = ac.createOscillator(), g = ac.createGain();
+        o.type = 'triangle'; o.frequency.value = hz;
+        g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.42, t + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.001, t + BEAT * 0.85);
+        o.connect(g); g.connect(bus); o.start(t); o.stop(t + BEAT);
+      };
+      const NOTES = [55, 55, 73.42, 65.41];
+      let n = 0, t0 = ac.currentTime + 0.08;
+      this.beatTimer = setInterval(() => {
+        if (!this.dance || !this.bus) return;
+        while (t0 + n * BEAT < ac.currentTime + 0.35) {
+          const t = t0 + n * BEAT, step = n % 4;
+          if (step === 0 || step === 2) kick(t);
+          hat(t + BEAT * 0.5);
+          bass(t, NOTES[step]);
+          n++;
+        }
+      }, 90);
+    } catch (err) { /* audio is optional */ }
+  }
+
+  stopBeat() {
+    if (this.track) { try { this.track.pause(); } catch (e) {} }
+    if (this.beatTimer) { clearInterval(this.beatTimer); this.beatTimer = null; }
+    if (this.bus) { try { this.bus.disconnect(); } catch (e) {} this.bus = null; }
+    if (this.audio) { try { this.audio.close(); } catch (e) {} this.audio = null; }
+  }
+
+  ensure() {
+    const e = this.e;
+    if (e && e.kSvg.isConnected && e.kBar.isConnected && e.kHead.isConnected) return true;
+    const n = {};
+    for (const id of IDS) {
+      const el = document.getElementById(id);
+      if (!el) return false;
+      n[id] = el;
+    }
+    this.e = n; this.cache = {}; this._lastLabel = -1; this._ink = null; this._hq = null;
+    if (this.legacy) { this.legacy = false; this.toggleLegacy(); }
+    return true;
+  }
+
+  boot() {
+    if (this.dead || this.booted) return;
+    this.cache = {};
+    if (!this.ensure()) { this.bootRaf = requestAnimationFrame(() => this.boot()); return; }
+    this.booted = true;
+
+    if (!this.sYaw) {
+      this.px = 0; this.py = 0; this.side = 0; this.everMoved = false;
+      this.autoMix = 1; this.tIn = -99; this.blinkT = -9; this.nextBlink = 5 + Math.random() * 7;
+      this.browT = -9; this.dance = false; this.danceT0 = 0; this.danceBop = 0; this.danceBrow = 0; this.audio = null; this.track = null;
+      this.legacy = false; this.stats = false;
+      this.sYaw = new Spring(1.9, 0.7); this.sPit = new Spring(2.6, 0.9);
+      this.sHx = new Spring(1.35, 0.62); this.sHy = new Spring(1.35, 0.62);
+      this.sEx = new Spring(4.2, 0.95); this.sEy = new Spring(4.2, 0.95);
+      this.lYaw = new Euler(120, 11.5); this.lPit = new Euler(240, 15);
+      this.ft = 16.7;
+      const p = PAIRS[Math.floor(Math.random() * PAIRS.length)];
+      this.theme = { ink: p[0], bg: p[1] };
+    }
+    this.detach();
+
+    const setP = (cx, cy) => {
+      const r = this.e.kStage.getBoundingClientRect();
+      this.px = ((cx - r.left) / r.width) * 2 - 1;
+      this.py = ((cy - r.top) / r.height) * 2 - 1;
+      this.everMoved = true; this.tIn = performance.now() / 1000;
+    };
+    this.onMove = (ev) => {
+      const list = ev.getCoalescedEvents ? ev.getCoalescedEvents() : null;
+      const e2 = list && list.length ? list[list.length - 1] : ev;
+      setP(e2.clientX, e2.clientY);
+    };
+    this.onDown = () => {
+      const T = performance.now() / 1000;
+      this.browT = T; this.sPit.v += 1.0; this.sYaw.v += (this.side || 1) * 0.3;
+    };
+    this.onInput = (ev) => {
+      const t = ev.target;
+      if (!t || !t.dataset || !t.dataset.p) return;
+      const k = t.dataset.p;
+      const v = t.type === 'checkbox' ? t.checked : parseFloat(t.value);
+      this.props[k] = v;
+      const out = document.querySelector('[data-out="' + k + '"]');
+      if (out) out.textContent = (k === 'travel' || k === 'roll') ? String(v) : v.toFixed(2);
+    };
+    this.onKey = (ev) => {
+      const k = (ev.key || '').toLowerCase();
+      if (k === 'l') this.toggleLegacy();
+      if (k === 'd') this.toggleStats();
+    };
+    this.setPanel = (open) => {
+      const b = document.getElementById('kPanelB'), pn = document.getElementById('kPanel'), h = document.getElementById('kPanelT');
+      const stage = document.getElementById('kStage'), svg = document.getElementById('kSvg');
+      if (!b || !pn || !stage) return;
+      b.style.display = open ? 'grid' : 'none';
+      if (h) h.style.color = open ? '#141414' : '#9a9b9f';
+      b.style.maxHeight = ''; b.style.overflowY = '';
+      b.style.top = 'calc(100% + 9px)';
+      b.style.left = '50%';
+      b.style.transform = 'translateX(-50%)';
+      const cols = document.getElementById('kCols'), inner = cols ? [].slice.call(cols.children) : [];
+      const bar = document.getElementById('kBar'), dance = document.getElementById('kDance');
+      const stack = () => {
+        b.style.width = 'min(452px, 88vw)';
+        cols.style.display = 'grid';
+        cols.style.gridTemplateColumns = 'repeat(3, 1fr)';
+        cols.style.justifyContent = '';
+        inner.forEach(c => { c.style.display = 'grid'; });
+        if (bar) bar.style.justifyContent = '';
+        if (dance) { dance.style.flex = '1 1 122px'; dance.style.maxWidth = ''; }
+      };
+      // clusters side by side: 3 sliders | 3 sliders | ink + background
+      const spread = () => {
+        b.style.width = 'min(94vw, 604px)';
+        cols.style.display = 'grid';
+        cols.style.gridTemplateColumns = 'repeat(auto-fit, minmax(0, 168px))';
+        cols.style.justifyContent = 'center';
+        inner.forEach((c, i) => { c.style.display = i === 2 ? 'contents' : 'grid'; });
+        if (bar) bar.style.justifyContent = 'center';
+        if (dance) { dance.style.flex = '0 1 260px'; dance.style.maxWidth = '260px'; }
+      };
+      // everything on one line — for wide, short windows
+      const flatten = () => {
+        spread();
+        b.style.width = 'min(96vw, 1180px)';
+        cols.style.gridTemplateColumns = 'repeat(auto-fit, minmax(0, 152px))';
+        inner.forEach(c => { c.style.display = 'contents'; });
+      };
+      if (!open) { stage.style.setProperty('--pk', '1'); return; }
+      const vw = innerWidth, vh = innerHeight, mob = matchMedia('(max-width: 880px)').matches;
+      stage.style.setProperty('--pk', '1');
+      requestAnimationFrame(() => {
+        const pwNat = svg.getBoundingClientRect().width / (parseFloat(stage.style.getPropertyValue('--pk')) || 1);
+        const labelH = (h ? h.getBoundingClientRect().height : 34) + 9;
+        const slope = mob ? 0.5625 : 0.215, base = mob ? 0.17 * vh + 14 : 0.5 * vh;
+        const roomAt = (k) => vh - 14 - labelH - (base + pwNat * k * slope);
+        const room = roomAt(1);
+        // keep the head its natural size: try tall, then wide, then wider, and only then scroll
+        const tiers = mob ? [stack] : vw > 880 ? [stack, spread, flatten] : vw > 700 ? [stack, spread] : [stack];
+        let hgt = 0, best = null, bestH = Infinity;
+        for (let i = 0; i < tiers.length; i++) {
+          tiers[i]();
+          hgt = b.getBoundingClientRect().height;
+          if (hgt < bestH) { bestH = hgt; best = tiers[i]; }
+          if (hgt <= room) break;
+        }
+        if (hgt > room && best) { best(); hgt = bestH; }
+        let k = 1;
+        if (hgt > room) {
+          // still short: give the panel a floor of 190px by nudging the head up a little
+          const want = Math.min(hgt, 190);
+          if (room < want) k = Math.max(0.62, (vh - 14 - labelH - want - base) / (pwNat * slope));
+          const finalRoom = roomAt(k);
+          if (hgt > finalRoom) { b.style.maxHeight = Math.max(120, finalRoom) + 'px'; b.style.overflowY = 'auto'; }
+        }
+        stage.style.setProperty('--pk', String(k));
+        // clamp against where the label WILL settle, not its mid-transition rect
+        const pr = pn.getBoundingClientRect(), bw = b.getBoundingClientRect().width;
+        const mr = Math.min(0.09 * vw, 128) + Math.min(Math.max(0, (vw - 1100) * 0.34), 140);
+        const cx = mob ? vw / 2 + pwNat * 0.0625 : vw - mr - pwNat * 0.4375;
+        b.style.left = (Math.max(8, Math.min(cx - bw / 2, vw - bw - 8)) - cx + pr.width / 2) + 'px';
+        b.style.transform = 'none';
+      });
+    };
+    this.onClick = (ev) => {
+      const t = ev.target && ev.target.closest ? ev.target.closest('button') : null;
+      const inPanel = ev.target && ev.target.closest ? ev.target.closest('#kPanel') : null;
+      const body = document.getElementById('kPanelB');
+      if (!inPanel && body && body.style.display !== 'none') this.setPanel(false);
+      if (!t) return;
+      if (t.id === 'kDance') { this.toggleDance(); return; }
+      if (t.id === 'kShuffle') { this.shuffle(); return; }
+      if (t.id === 'kReset') {
+        const D = { travel: 76, responsiveness: 1.75, springiness: 0.9, roll: 6, hairWrap: 1,
+          pitchDepth: 0.62, idleLife: true };
+        for (const k in D) this.props[k] = D[k];
+        if (this.dance) this.toggleDance();
+        this.applyTheme();
+        this.syncPanel();
+        return;
+      }
+      if (t.id === 'kPanelT') {
+        const b = document.getElementById('kPanelB');
+        this.setPanel(b.style.display === 'none');
+        return;
+      }
+      if (t.dataset && t.dataset.c) {
+        this.theme[t.dataset.c === 'inkColor' ? 'ink' : 'bg'] = t.dataset.v;
+        this.applyTheme();
+        document.querySelectorAll('[data-c="' + t.dataset.c + '"]').forEach(b => b.setAttribute('data-on', b === t ? '1' : '0'));
+        return;
+      }
+      if (t.id === 'kLegacy') this.toggleLegacy();
+      if (t.id === 'kStats') this.toggleStats();
+    };
+    this.onResize = () => {
+      const b = document.getElementById('kPanelB');
+      if (b && b.style.display !== 'none') this.setPanel(true);
+    };
+    addEventListener('resize', this.onResize);
+    addEventListener('pointermove', this.onMove, { passive: true });
+    addEventListener('pointerdown', this.onDown, { passive: true });
+    addEventListener('keydown', this.onKey);
+    addEventListener('click', this.onClick);
+    addEventListener('input', this.onInput);
+
+    const en = document.getElementById('kEnter');
+    if (en) en.textContent = WORDS[Math.floor(Math.random() * WORDS.length)];
+    this.applyTheme();
+    this.syncPanel();
+    this._t = performance.now();
+    this.loop = (n) => { this.tick(n); this.raf = requestAnimationFrame(this.loop); };
+    this._t = performance.now() - 16.7;
+    this.tick(performance.now());
+    this.raf = requestAnimationFrame(this.loop);
+    window.__erk = {
+      aim: (x, y) => {
+        this.px = x * 2 - 1; this.py = y * 2 - 1; this.everMoved = true;
+        this.tIn = this._t / 1000; this.autoMix = 0;
+        this.e.kReadout.textContent = 'aim ' + x.toFixed(2) + ' , ' + y.toFixed(2);
+      },
+      settle: (secs) => {
+        const n = Math.round((secs || 1.2) * 60);
+        for (let i = 0; i < n; i++) this.tick(this._t + 16.667);
+        this._t = performance.now();
+      },
+      blink: (ph) => { this.blinkT = performance.now() / 1000 - (ph || 0.5) * 0.26; this.tick(this._t + 16.667); },
+      state: () => ({ u: this.sYaw.x, pit: this.sPit.x, side: this.side, autoMix: this.autoMix })
+    };
+  }
+
+  componentDidUpdate() { this.applyTheme(); }
+
+  detach() {
+    cancelAnimationFrame(this.raf);
+    if (!this.onMove) return;
+    removeEventListener('resize', this.onResize);
+    removeEventListener('pointermove', this.onMove);
+    removeEventListener('pointerdown', this.onDown);
+    removeEventListener('keydown', this.onKey);
+    removeEventListener('click', this.onClick);
+    removeEventListener('input', this.onInput);
+  }
+
+  componentWillUnmount() {
+    this.dead = true;
+    this.dance = false;
+    this.stopBeat();
+    cancelAnimationFrame(this.bootRaf);
+    this.detach();
+  }
+
+  syncPanel() {
+    const DEF = { travel: 76, responsiveness: 1.75, springiness: 0.9, roll: 6, hairWrap: 1, pitchDepth: 0.62 };
+    for (const k in DEF) {
+      const el = document.querySelector('input[data-p="' + k + '"]');
+      if (!el) continue;
+      const v = this.props[k] != null ? this.props[k] : DEF[k];
+      el.value = v;
+      const out = document.querySelector('[data-out="' + k + '"]');
+      if (out) out.textContent = (k === 'travel' || k === 'roll') ? String(v) : Number(v).toFixed(2);
+    }
+    const life = document.querySelector('input[data-p="idleLife"]');
+    if (life) life.checked = this.props.idleLife !== false;
+    const ink = (this.theme || {}).ink || '#141414', bg = (this.theme || {}).bg || '#fbfbfa';
+    document.querySelectorAll('[data-c="inkColor"]').forEach(b => b.setAttribute('data-on', b.dataset.v === ink ? '1' : '0'));
+    document.querySelectorAll('[data-c="bgColor"]').forEach(b => b.setAttribute('data-on', b.dataset.v === bg ? '1' : '0'));
+  }
+
+  applyTheme() {
+    if (!this.booted || !this.ensure()) return;
+    if (!this.theme) { const r = PAIRS[Math.floor(Math.random() * PAIRS.length)]; this.theme = { ink: r[0], bg: r[1] }; }
+    const ink = this.theme.ink, bg = this.theme.bg;
+    this.e.kStage.style.background = bg;
+    document.body.style.background = bg;
+    if (ink !== this._ink) {
+      const prev = this._ink || '#141414';
+      this.e.kSvg.querySelectorAll('[stroke="' + prev + '"]').forEach(n => n.setAttribute('stroke', ink));
+      this.e.kSvg.querySelectorAll('[fill="' + prev + '"]').forEach(n => n.setAttribute('fill', ink));
+      this._ink = ink;
+    }
+    const hi = document.getElementById('kHi'), soc = document.getElementById('kSocial');
+    const tile = document.getElementById('kLiTile'), lin = document.getElementById('kLiIn'), xm = document.getElementById('kXm');
+    const FONTS = {
+      'Instrument Sans': ["'Instrument Sans', Helvetica, sans-serif", '500', '-0.03em'],
+      'Space Grotesk': ["'Space Grotesk', Helvetica, sans-serif", '500', '-0.035em'],
+      'Gabarito': ["'Gabarito', Helvetica, sans-serif", '700', '-0.035em']
+    };
+    const f = FONTS[this.props.headlineFont] || FONTS['Instrument Sans'];
+    if (hi) {
+      hi.style.color = ink;
+      hi.style.fontFamily = f[0]; hi.style.fontWeight = f[1]; hi.style.letterSpacing = f[2];
+    }
+    if (soc) soc.querySelectorAll('a').forEach(a => { a.style.color = ink; });
+    if (tile) tile.setAttribute('fill', ink);
+    if (lin) lin.setAttribute('fill', bg);
+    if (xm) xm.setAttribute('fill', ink);
+    const xin = document.getElementById('kXIn');
+    if (xin) xin.setAttribute('fill', bg);
+    this.e.kBar.style.display = this.props.showControls === false ? 'none' : 'flex';
+  }
+
+  toggleLegacy() {
+    this.legacy = !this.legacy;
+    this.e.kLegacy.setAttribute('data-on', this.legacy ? '1' : '0');
+    const f = this.legacy ? 'url(#kDs)' : '';
+    this.e.kHair.setAttribute('filter', f);
+    this.e.kFeat.setAttribute('filter', f);
+    this.e.kSvg.querySelectorAll('[data-sh="1"]').forEach(n => { n.style.display = this.legacy ? 'none' : ''; });
+    if (this.legacy) { this.lYaw.x = this.sYaw.x; this.lPit.x = this.sPit.x; }
+    else { this.sYaw.x = this.lYaw.x; this.sPit.x = this.lPit.x; }
+    this._lastLabel = -1;
+  }
+
+  toggleStats() {
+    this.stats = !this.stats;
+    this.e.kStats.setAttribute('data-on', this.stats ? '1' : '0');
+    this._lastLabel = -1;
+  }
+
+  set(el, attr, val) {
+    const k = el.id + '|' + attr;
+    if (this.cache[k] === val) return;
+    this.cache[k] = val; el.setAttribute(attr, val);
+  }
+
+  noseD(dir) {
+    const n = NOSE.length / 2, X = [], Y = [];
+    const b = 2.6 * dir;
+    for (let i = 0; i < n; i++) { X.push(NOSE[i * 2] * dir * 1.26 + b); Y.push(NOSE[i * 2 + 1]); }
+    let d = 'M ' + X[0].toFixed(2) + ' ' + Y[0].toFixed(2);
+    for (let i = 0; i < n - 1; i++) {
+      const a = i ? i - 1 : 0, b2 = i + 2 < n ? i + 2 : n - 1;
+      d += ' C ' + (X[i] + (X[i + 1] - X[a]) / 6).toFixed(2) + ' ' + (Y[i] + (Y[i + 1] - Y[a]) / 6).toFixed(2) +
+           ' ' + (X[i + 1] - (X[b2] - X[i]) / 6).toFixed(2) + ' ' + (Y[i + 1] - (Y[b2] - Y[i]) / 6).toFixed(2) +
+           ' ' + X[i + 1].toFixed(2) + ' ' + Y[i + 1].toFixed(2);
+    }
+    return d;
+  }
+
+  earD(el, w, sign) {
+    const key = sign + '|' + w.toFixed(3);
+    if (el._ed === key) return;
+    el._ed = key;
+    let d = '';
+    for (const [c, p] of EAR) {
+      d += c;
+      for (let i = 0; i < p.length; i += 2) d += ' ' + (p[i] * w * sign).toFixed(2) + ' ' + p[i + 1];
+      d += ' ';
+    }
+    el.setAttribute('d', d);
+  }
+
+  tick(now) {
+    if (!this.ensure()) return;
+    const E = this.e, P = this.props || {}, L = this.legacy;
+    const dt = Math.max(0, Math.min((now - this._t) / 1000, 0.1)); this._t = now;
+    const T = now / 1000;
+
+    const TRAVEL = L ? 92 : (P.travel != null ? P.travel : 76);
+    const RESP = L ? 1.9 : (P.responsiveness != null ? P.responsiveness : 1.75);
+    const BOUNCE = L ? 0.55 : (P.springiness != null ? P.springiness : 0.9);
+    const ROLL = L ? 3 : (P.roll != null ? P.roll : 6);
+    const WRAP = L ? 0 : (P.hairWrap != null ? P.hairWrap : 1);
+    const PITCH = L ? 0.33 : (P.pitchDepth != null ? P.pitchDepth : 0.62);
+    const GF = L ? 0.5 : 0.36;
+    const GT = L ? 0.95 : 0.78;
+    const PIV = L ? 95 : 128;
+    const LIFE = L ? false : (P.idleLife !== false);
+
+    // ---- input: real cursor, crossfaded with an idle wander ----
+    const since = T - this.tIn;
+    const wantAuto = LIFE && (!this.everMoved || since > 5.5) ? 1 : 0;
+    this.autoMix += (wantAuto - this.autoMix) * (1 - Math.exp(-dt * (wantAuto ? 0.9 : 4.5)));
+    const m = this.autoMix;
+    const aX = 0.66 * Math.sin(T * 0.53) + 0.24 * Math.sin(T * 0.91 + 1.7);
+    const aY = 0.34 * Math.sin(T * 0.67 + 2.1);
+    const breath = LIFE ? SS(0.9, 2.4, since) * (1 - m * 0.5) : 0;
+    let tx = this.px * (1 - m) + aX * m + breath * 0.03 * Math.sin(T * 0.37);
+    let ty = this.py * (1 - m) + aY * m;
+    if (this.dance) {
+      const BEAT = 60 / MUSIC.bpm, el = T - this.danceT0;
+      const ramp = SS(0, 1.4, el);
+      const ph = (el / BEAT) % 1, bar = (el / (BEAT * 4)) % 1;
+      tx = 0.42 * Math.sin(bar * Math.PI * 2) * ramp;
+      ty = (-0.04 + 0.36 * Math.sin(ph * Math.PI * 2) + 0.11 * Math.sin(ph * Math.PI * 4)) * ramp;
+      this.danceBop = (0.5 * (1 - Math.cos(ph * Math.PI * 2)) + 0.09 * (1 - Math.cos(ph * Math.PI * 4))) * ramp;
+      this.danceBrow = 0.22 * (1 - Math.cos(bar * Math.PI * 4)) * ramp;
+    } else {
+      const k = Math.min(1, dt * 3.2);
+      this.danceBop += (0 - this.danceBop) * k;
+      this.danceBrow += (0 - this.danceBrow) * k;
+    }
+
+    // ---- pose machine ----
+    const s = tx < 0 ? -1 : tx > 0 ? 1 : 0;
+    if (this.side === 0 && Math.abs(tx) > 0.05) this.side = s;
+    if (s && s !== this.side && Math.abs(tx) > 0.12) {
+      const big = Math.abs(tx) > 0.28;
+      this.side = s;
+      if (!L && big) { this.sYaw.v -= s * 1.15; if (Math.random() < 0.45) this.blinkT = T + 0.05; }
+    }
+    const mag = Math.pow(Math.abs(tx), 0.4) * 1.22;
+    const cmix = SS(0.1, 0.3, Math.abs(tx));
+    let yt = (s || this.side) * mag * (1 - cmix) + this.side * mag * cmix;
+    if (yt > 0) yt *= 0.86;
+    yt = L ? CL(yt, -0.72, 0.72) : SOFT(yt, 0.78);
+
+    let u, pit;
+    if (L) {
+      u = CL(this.lYaw.step(CL(yt, -1, 1), dt), -1, 1);
+      pit = CL(this.lPit.step(CL(ty, -0.8, 1), dt), -0.85, 1.05);
+    } else {
+      this.sYaw.tune(RESP, CL(1 - 0.5 * BOUNCE, 0.35, 1.4));
+      this.sPit.tune(RESP * 1.42, CL(1 - 0.52 * BOUNCE, 0.35, 1.4));
+      u = CL(this.sYaw.step(yt, dt), -1, 1);
+      pit = CL(this.sPit.step(CL(ty, -1, 1), dt), -1.08, 1.08);
+    }
+
+    const JX = u * TRAVEL;
+    const JY = pit * TRAVEL * PITCH + (L ? 0 : 4.2 * u * u + breath * 2.4 * Math.sin(T * 1.45));
+
+    // ---- one shared rigid-body transform for the whole head ----
+    const roll = u * ROLL + (L ? 0 : breath * 0.5 * Math.sin(T * 0.93 + 1));
+    const persp = L ? 0 : 0.055;
+    const sx = 1 - persp * u * u, sy = 1 + persp * 0.3 * u * u;
+    this.set(E.kHead, 'transform',
+      'rotate(' + roll.toFixed(3) + ' 0 ' + PIV + ') translate(0 -34) scale(' + sx.toFixed(4) + ' ' + sy.toFixed(4) +
+      ') translate(0 34) translate(0 132) skewX(' + (-u * 2.2).toFixed(2) + ') translate(0 -132)');
+    if (this.dance || this.danceBop > 0.002) {
+      const b = this.danceBop;
+      E.kSvg.style.transformOrigin = '50% 84%';
+      E.kSvg.style.transform = 'translateY(' + (-b * 14).toFixed(2) + 'px) rotate(' + (b * Math.sin(T * 1.9) * 2.1).toFixed(2) + 'deg) scale(' + (1 + b * 0.015).toFixed(4) + ')';
+      this._bopSet = true;
+    } else if (this._bopSet) { E.kSvg.style.transform = ''; this._bopSet = false; }
+    this.set(E.kChinHead, 'transform', this.cache['kHead|transform']);
+
+    // ---- layers ----
+    const fX = GF * JX, fY = GF * JY;
+    const fT = 'translate(' + fX.toFixed(2) + ' ' + fY.toFixed(2) + ')';
+    this.set(E.kFace, 'transform', fT);
+    this.set(E.kFaceLine, 'transform', fT);
+    this.set(E.kClipHost, 'transform', fT);
+    this.set(E.kNoseHost, 'transform', fT);
+    this.set(E.kFeatShHost, 'transform', fT);
+    this.set(E.kChinSh, 'transform', fT);
+
+    // ---- hair: lerp the anchors, re-emit one Bezier path ----
+    const uu = CL(u / UMAX, -1, 1);
+    this.set(E.kHairClip, 'transform', fT);
+    this.set(E.kHair, 'transform', fT);
+    const hq = Math.round(SOFT(WRAP * uu, 1) * 40) / 40;
+    if (this._hq !== hq) {
+      this._hq = hq;
+      const d = hairD(hq);
+      E.kHairP.setAttribute('d', d);
+      E.kHairShP.setAttribute('d', d);
+    }
+
+    // features: soft-limited so the far lens eases into the silhouette edge
+    let ftX = GT * JX; const ftY = GT * JY;
+    const pinch = Math.max(0, ftY) * 0.62;
+    const limR = (78 - pinch + fX) - RX, limL = (-75.5 + pinch + fX) - LX;
+    if (u > 0) ftX = L ? Math.min(ftX, limR) : softMin(ftX, limR, 4.5);
+    if (u < 0) ftX = L ? Math.max(ftX, limL) : softMax(ftX, limL, 4.5);
+    const rotF = u * 6.5;
+    this.set(E.kFeat, 'transform',
+      'translate(' + ftX.toFixed(2) + ' ' + ftY.toFixed(2) + ') rotate(' + rotF.toFixed(2) + ' 1 -14)');
+    const relT = 'translate(' + (ftX - fX).toFixed(2) + ' ' + (ftY - fY).toFixed(2) + ') rotate(' + rotF.toFixed(2) + ' 1 -14)';
+    this.set(E.kFeatIn, 'transform', relT);
+    // the lenses show the hair behind them, with a whisker of magnification for depth:
+    // an unmagnified copy underneath guarantees the glass never opens a gap at the rim
+    this.set(E.kNoseIn, 'transform', relT);
+    this.set(E.kFeatShIn, 'transform', relT);
+
+    // ears
+    const eX = 0;
+    const earN = CL(u / UMAX, -1, 1);
+    const earW = (lead) => Math.max(0.3, 1 - 0.94 * SS(0.08, 0.9, lead)) + 0.16 * SS(0.1, 0.85, -lead);
+    const earO = (lead) => (1 - SS(0.42, 0.7, lead)).toFixed(3);
+    this.set(E.kEarL, 'transform', 'translate(' + (-99 + eX + fX).toFixed(1) + ' ' + (fY - 3).toFixed(1) + ')');
+    this.set(E.kEarR, 'transform', 'translate(' + (107 + eX + fX).toFixed(1) + ' ' + (fY - 3).toFixed(1) + ')');
+    this.earD(E.kEarL.firstElementChild, earW(-earN), 1);
+    this.earD(E.kEarR.firstElementChild, earW(earN), -1);
+    this.set(E.kEarL, 'opacity', earO(-earN));
+    this.set(E.kEarR, 'opacity', earO(earN));
+
+    // Stems: rim -> just above the ear, both endpoints computed per frame in head space.
+    const rr = rotF * Math.PI / 180, rC = Math.cos(rr), rSn = Math.sin(rr);
+    const fmap = (x, y) => { const dx = x - 1, dy = y + 14; return [1 + dx * rC - dy * rSn + ftX, -14 + dx * rSn + dy * rC + ftY]; };
+    const stem = (el, cx, cy, r, ax, ay, lead) => {
+      const c = fmap(cx, cy), dx = ax - c[0], dy = ay - c[1], dd = Math.hypot(dx, dy) || 1;
+      el.setAttribute('d', 'M ' + (c[0] + dx / dd * (r + 1.5)).toFixed(1) + ' ' + (c[1] + dy / dd * (r + 1.5)).toFixed(1) + ' L ' + ax.toFixed(1) + ' ' + ay.toFixed(1));
+      el.setAttribute('opacity', (1 - SS(0.4, 0.78, lead)).toFixed(3));
+    };
+    stem(E.kStemL, LX, LY, 38.5, -99 + fX - 8 * earW(-earN), fY - 24, -uu);
+    stem(E.kStemR, RX, RY, 36, 107 + fX + 8 * earW(earN), fY - 24, uu);
+
+    // shadows are cast, not painted on: they slide against the turn
+    this.set(E.kFeatShOff, 'transform', 'translate(' + (-1.4 - 3.2 * earN).toFixed(2) + ' ' + (5.4 + 1.2 * Math.abs(earN)).toFixed(2) + ')');
+
+    // ---- blink ----
+    if (LIFE && T > this.nextBlink) { this.blinkT = T; this.nextBlink = T + 7 + Math.random() * 7; }
+    const bp = (T - this.blinkT) / 0.26;
+    const cs = bp >= 0 && bp <= 1 ? Math.sin(bp * Math.PI) : 0;
+    const closed = cs * cs;
+    const pupS = 1 - 0.66 * closed, pupW = 1 + 0.42 * closed;
+    const brP = (T - this.browT) / 0.6;
+    const brRaise = brP >= 0 && brP <= 1 ? Math.sin(brP * Math.PI) : 0;
+    this.set(E.kBrows, 'transform', 'translate(0 ' + (Math.max(0, -pit) * 9 - closed * 4.5 - brRaise * 10 - this.danceBrow * 7).toFixed(2) + ')');
+    this.sEx.step(CL(tx, -1, 1), dt); this.sEy.step(CL(ty, -1, 1), dt);
+    const ex = this.sEx.x, ey = this.sEy.x;
+    this.set(E.kPupL, 'transform', 'translate(' + (LX + 5 + ex * 3).toFixed(2) + ' ' + (LY - 11 + ey * 2).toFixed(2) + ') scale(' + pupW.toFixed(3) + ' ' + pupS.toFixed(3) + ')');
+    this.set(E.kPupR, 'transform', 'translate(' + (RX - 5 + ex * 3).toFixed(2) + ' ' + (RY - 11 + ey * 2).toFixed(2) + ') scale(' + pupW.toFixed(3) + ' ' + pupS.toFixed(3) + ')');
+
+    // ---- small parts ----
+    const dir = Math.tanh(u * 3.4);
+    if (L) {
+      const sxn = Math.abs(dir) < 0.22 ? (dir < 0 ? -0.22 : 0.22) : dir;
+      this.set(E.kNoseC, 'transform', 'scale(' + sxn.toFixed(3) + ' 1)');
+      this.set(E.kNoseC, 'vector-effect', 'non-scaling-stroke');
+    } else {
+      this.set(E.kNoseC, 'transform', '');
+      this.set(E.kNoseC, 'vector-effect', 'none');
+      const nd = this.noseD(dir);
+      this.set(E.kNoseC, 'd', nd);
+    }
+    this.set(E.kNose, 'transform',
+      'translate(' + (0.06 * JX).toFixed(2) + ' ' + (pit * 2 - 2).toFixed(2) +
+      ') rotate(' + (7.5 * dir).toFixed(2) + ' 0 -10)');
+    const un = CL(u / UMAX, -1, 1);
+    const nu = un * (0.55 + 0.45 * un * un), na = (L ? 0 : 5) * nu, nt = (L ? 0 : -5.5) * nu;
+    // one shared pivot so the white neck fill stays registered to both neck lines
+    const nT = 'rotate(' + na.toFixed(2) + ' -9.1 110) translate(' + nt.toFixed(1) + ' 0)';
+    this.set(E.kNeckL, 'transform', nT);
+    this.set(E.kNeckR, 'transform', nT);
+    this.set(E.kNeckFill, 'transform', nT);
+    this.set(E.kNeckClipP, 'transform', nT);
+    this.set(E.kMouth, 'transform', 'translate(' + (u * 4).toFixed(2) + ' ' + (pit * 2).toFixed(2) + ') rotate(' + (-un * 5).toFixed(2) + ' 0 60)');
+    const mq = Math.round(un * 20) / 20;
+    if (this._mq !== mq) {
+      this._mq = mq;
+      const a = Math.abs(mq), bend = 6.5 * a, w = 30.5 - 3 * a, s2 = -mq;
+      E.kMouthP.setAttribute('d', 'M ' + (-w) + ' ' + (56.3 - bend * 0.35 + s2 * 4.3).toFixed(1) +
+        ' C ' + (-10.2 + s2 * 1.1).toFixed(1) + ' ' + (64.25 + bend * 0.9 + s2 * 1.45).toFixed(1) +
+        ' ' + (10.2 + s2 * 1.1).toFixed(1) + ' ' + (64.25 + bend * 0.9 - s2 * 1.45).toFixed(1) +
+        ' ' + w + ' ' + (56.3 - bend * 0.35 - s2 * 4.3).toFixed(1));
+    }
+
+    // ---- readout ----
+    this.ft += ((now - (this._prev || now - 16.7)) - this.ft) * 0.06; this._prev = now;
+    if (this.stats) {
+      if (T - (this.statT || 0) > 0.28) {
+        this.statT = T;
+        E.kReadout.textContent = (1000 / Math.max(this.ft, 0.5)).toFixed(0) + ' fps · ' + this.ft.toFixed(1) + ' ms';
+      }
+    } else if (this._lastLabel !== (L ? 1 : 0)) {
+      this._lastLabel = L ? 1 : 0;
+      E.kReadout.textContent = L ? 'original rig' : 'bezier rig';
+    }
+  }
+
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
