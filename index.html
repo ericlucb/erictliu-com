@@ -42,6 +42,22 @@
   #kPanel .sw[data-on="1"] { box-shadow:0 0 0 2px #141414; }
   #kPanel button.tx { appearance:none; background:transparent; border:0; color:#a6a7ac; cursor:pointer; font:inherit; padding:0; letter-spacing:.09em; }
   #kPanel button.tx:hover { color:#141414; }
+
+  /* Touch devices: grow the hit areas without changing how anything looks.
+     The sliders get a tall transparent box pulled back by a negative margin,
+     so the row keeps its height while the grabbable area is ~26px. The track
+     has to move to the pseudo-element, or the whole box paints grey. */
+  @media (pointer: coarse) {
+    #kPanel input[type=range] { height:26px; margin:-11px 0; background:transparent; }
+    #kPanel input[type=range]::-webkit-slider-runnable-track { height:3px; background:#e2e1dc; border-radius:2px; }
+    #kPanel input[type=range]::-webkit-slider-thumb { margin-top:-5px; }
+    #kPanel input[type=range]::-moz-range-track { height:3px; background:#e2e1dc; border-radius:2px; }
+    /* Swatches keep their 22px circle; ::after extends the tap area past it.
+       Widen the row so neighbouring targets do not overlap. */
+    #kSwatches > div > div { gap:13px !important; }
+    #kPanel .sw { position:relative; }
+    #kPanel .sw::after { content:''; position:absolute; inset:-7px; border-radius:50%; }
+  }
   #kPanelT { transition:color .18s; }
   #kPanelT svg { transition:transform .4s ease; }
   #kPanelT:hover svg { transform:rotate(60deg); }
@@ -225,7 +241,7 @@
     </div>
     <div id="kPanelB" style="display:none; box-sizing:border-box; gap:10px; position:absolute; top:calc(100% + 9px); left:50%; transform:translateX(-50%); width:min(452px, 88vw); padding:12px 14px 13px; background:rgba(255,255,255,.94); border:1px solid #e2e1dc; border-radius:11px; backdrop-filter:blur(7px); box-shadow:0 8px 30px rgba(20,20,20,.07); max-height:calc(100vh - 120px); overflow:auto;">
       <div id="kBar" style="display:flex; flex-wrap:wrap; align-items:center; gap:8px; font:10px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing:.09em; color:#a6a7ac; user-select:none;">
-        <button id="kDance" type="button" data-on="0" style="flex:1 1 122px; white-space:nowrap;">DANCE MODE</button><label style="display:flex; align-items:center; justify-content:center; gap:7px; flex:0 1 auto; padding:4px 11px; border:1px solid #e2e1dc; border-radius:999px; color:#a6a7ac; cursor:pointer; white-space:nowrap;"><span>IDLE LIFE</span><input type="checkbox" data-p="idleLife" style="accent-color:#141414; width:12px; height:12px; margin:0; cursor:pointer;"></label><button id="kShuffle" type="button">SHUFFLE</button><button id="kReset" type="button">RESET</button>
+        <button id="kDance" type="button" data-on="0" style="flex:1 1 122px; white-space:nowrap;">DANCE</button><label style="display:flex; align-items:center; justify-content:center; gap:7px; flex:0 1 auto; padding:4px 11px; border:1px solid #e2e1dc; border-radius:999px; color:#a6a7ac; cursor:pointer; white-space:nowrap;"><span>IDLE LIFE</span><input type="checkbox" data-p="idleLife" style="accent-color:#141414; width:12px; height:12px; margin:0; cursor:pointer;"></label><button id="kShuffle" type="button" style="white-space:nowrap;">SHUFFLE COLORS</button><button id="kReset" type="button">RESET</button>
         <span style="display:none;"><button id="kLegacy" type="button" data-on="0">OLD RIG</button><button id="kStats" type="button" data-on="0">FPS</button><span id="kReadout">bezier rig</span></span>
       </div>
       <div id="kCols" style="display:grid; grid-template-columns:repeat(3, 1fr); gap:11px 20px; align-items:start;">
