@@ -21,20 +21,33 @@ BG = "#fbfbfa"
 INK = "#141414"
 MUTED = "#a6a7ac"
 
-# The square of the drawing's own coordinate space that frames the head.
+# Squares of the drawing's own coordinate space: the whole head, and just the
+# glasses (lenses, brows, pupils, bridge).
 HEAD_VIEWBOX = "332 110 404 404"
+GLASSES_VIEWBOX = "452 237 176 176"
 
 CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 
+# Everything outside the glasses, dropped for the favicon.
+NOT_GLASSES = ["kFace", "kFaceLine", "kHair", "kHairClip", "kHairSh",
+               "kChinHead", "kEarL", "kEarR", "kNeck", "kMouth", "kNoseHost",
+               "kFeatShHost", "kStemL", "kStemR"]
+
 # Pin the random theme to PAIRS[0] (black on cream), point the eyes straight
 # ahead, let the springs settle, then freeze so the dump is a still frame.
+# settle() must stay short: idle drift re-engages after ~5.5s, so a long settle
+# walks the head back off-centre.
 HARNESS_HEAD = "<script>Math.random=function(){return 0;};</script>\n"
 HARNESS_TAIL = """
 <script>
 (function wait(){
   if (window.__erk) {
     __erk.aim(0.5, 0.5);
-    __erk.settle(6);
+    __erk.settle(1);
+    __STRIP__.forEach(function(id){
+      var el = document.getElementById(id);
+      if (el) el.remove();
+    });
     window.requestAnimationFrame = function(){ return 0; };
     document.documentElement.setAttribute('data-render-ready', '1');
   } else setTimeout(wait, 25);
@@ -43,16 +56,17 @@ HARNESS_TAIL = """
 """
 
 
-def rendered_dom() -> str:
+def rendered_dom(strip=()) -> str:
     """index.html as the browser has it after the script has run and settled."""
     page = (HERE / "index.html").read_text()
     page = page.replace(
         '<script src="./support.js"></script>',
         HARNESS_HEAD + '<script src="./support.js"></script>', 1)
+    tail = HARNESS_TAIL.replace("__STRIP__", repr(list(strip)).replace("'", '"'))
 
     # Must sit beside index.html so ./support.js still resolves.
     harness = HERE / ".render.html"
-    harness.write_text(page + HARNESS_TAIL)
+    harness.write_text(page + tail)
     try:
         dom = subprocess.run(
             [CHROME, "--headless", "--disable-gpu", "--no-sandbox",
@@ -111,28 +125,44 @@ def render(svg_text: str, width: int, height: int, out: Path) -> None:
 
 
 def main() -> None:
-    inner = portrait_markup(rendered_dom())
-    x, y, size, _ = HEAD_VIEWBOX.split()
+    # Icons: just the glasses on a white tile.
+    glasses = portrait_markup(rendered_dom(strip=NOT_GLASSES))
+    gx, gy, gsize, _ = (float(v) for v in GLASSES_VIEWBOX.split())
 
-    icon = (
-        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{HEAD_VIEWBOX}" '
-        f'width="{size}" height="{size}">'
-        f'<rect x="{x}" y="{y}" width="{size}" height="{size}" fill="{BG}"/>'
-        f"{inner}</svg>"
-    )
-    (HERE / "icon.svg").write_text(icon)
+    def tile(radius: float) -> str:
+        clip = open_g = ""
+        if radius:
+            clip = (f'<defs><clipPath id="kTile"><rect x="{gx:g}" y="{gy:g}" '
+                    f'width="{gsize:g}" height="{gsize:g}" rx="{radius:g}"/>'
+                    f"</clipPath></defs>")
+            open_g = '<g clip-path="url(#kTile)">'
+        else:
+            open_g = "<g>"
+        return (
+            f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{GLASSES_VIEWBOX}" '
+            f'width="{gsize:g}" height="{gsize:g}">{clip}{open_g}'
+            f'<rect x="{gx:g}" y="{gy:g}" width="{gsize:g}" height="{gsize:g}" '
+            f'fill="#ffffff"/>{glasses}</g></svg>'
+        )
 
-    render(icon, 180, 180, HERE / "apple-touch-icon.png")
+    rounded = tile(gsize * 0.22)
+    (HERE / "icon.svg").write_text(rounded)
+
+    # iOS masks apple-touch-icon itself and paints any transparency black, so
+    # that one stays a square opaque tile.
+    render(tile(0), 180, 180, HERE / "apple-touch-icon.png")
 
     with tempfile.TemporaryDirectory() as d:
         big = Path(d) / "icon512.png"
-        render(icon, 512, 512, big)
+        render(rounded, 512, 512, big)
         subprocess.run(
             ["magick", str(big), "-define", "icon:auto-resize=48,32,16",
              str(HERE / "favicon.ico")],
             check=True,
         )
 
+    # Link preview: the whole portrait.
+    inner = portrait_markup(rendered_dom())
     og = f"""<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
 <rect width="1200" height="630" fill="{BG}"/>
 <svg x="655" y="60" width="510" height="510" viewBox="{HEAD_VIEWBOX}">{inner}</svg>
