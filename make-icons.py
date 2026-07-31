@@ -26,6 +26,13 @@ HEAD_VIEWBOX = "332 110 404 404"
 
 CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 
+# How the portrait is posed in the link preview: aim 0.5 looks straight out and
+# lower turns the head to its left, toward the name. TRAVEL is the rig's own
+# slider and caps how far it will turn, so it is raised past its 76 default to
+# get a real three-quarter. The icons stay frontal at the defaults.
+OG_AIM = 0.0
+OG_TRAVEL = 140
+
 # Pin the random theme to PAIRS[0] (black on cream), point the eyes straight
 # ahead, let the springs settle, then freeze so the dump is a still frame.
 # settle() must stay short: idle drift re-engages after ~5.5s, so a long settle
@@ -35,8 +42,13 @@ HARNESS_TAIL = """
 <script>
 (function wait(){
   if (window.__erk) {
-    __erk.aim(0.5, 0.5);
-    __erk.settle(1);
+    var tr = __TRAVEL__;
+    if (tr) {
+      var el = document.querySelector('input[data-p="travel"]');
+      if (el) { el.value = tr; el.dispatchEvent(new Event('input', {bubbles: true})); }
+    }
+    __erk.aim(__AIMX__, 0.5);
+    __erk.settle(__SETTLE__);
     window.requestAnimationFrame = function(){ return 0; };
     document.documentElement.setAttribute('data-render-ready', '1');
   } else setTimeout(wait, 25);
@@ -45,16 +57,24 @@ HARNESS_TAIL = """
 """
 
 
-def rendered_dom() -> str:
-    """index.html as the browser has it after the script has run and settled."""
+def rendered_dom(aim_x=0.5, settle=1.0, travel=None) -> str:
+    """index.html as the browser has it after the script has run and settled.
+
+    aim_x is where the eyes are pointed across the stage: 0.5 looks straight
+    out, lower values turn the head to its left. travel overrides the rig's
+    TRAVEL slider, which caps how far the head will turn.
+    """
     page = (HERE / "index.html").read_text()
     page = page.replace(
         '<script src="./support.js"></script>',
         HARNESS_HEAD + '<script src="./support.js"></script>', 1)
+    tail = (HARNESS_TAIL.replace("__AIMX__", repr(float(aim_x)))
+                        .replace("__SETTLE__", repr(float(settle)))
+                        .replace("__TRAVEL__", repr(travel) if travel else "0"))
 
     # Must sit beside index.html so ./support.js still resolves.
     harness = HERE / ".render.html"
-    harness.write_text(page + HARNESS_TAIL)
+    harness.write_text(page + tail)
     try:
         dom = subprocess.run(
             [CHROME, "--headless", "--disable-gpu", "--no-sandbox",
@@ -112,6 +132,29 @@ def render(svg_text: str, width: int, height: int, out: Path) -> None:
     Path(tmp).unlink()
 
 
+def content_viewbox(inner: str, pad: float = 1.2) -> str:
+    """A square viewBox framing whatever the drawing actually covers.
+
+    Turning the head moves it within the drawing's coordinate space, so a fixed
+    crop clips the chin. Render on transparency, let ImageMagick report the
+    trim box, and centre a square on it. 1 user unit renders as 1px here, so
+    the box reads straight back as viewBox coordinates.
+    """
+    probe = (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 720" '
+             f'width="960" height="720">{inner}</svg>')
+    with tempfile.TemporaryDirectory() as d:
+        png = Path(d) / "probe.png"
+        render(probe, 960, 720, png)
+        box = subprocess.run(["magick", str(png), "-format", "%@", "info:"],
+                             capture_output=True, text=True, check=True).stdout.strip()
+    w, rest = box.split("x")
+    h, x, y = rest.split("+")
+    w, h, x, y = int(w), int(h), int(x), int(y)
+    side = max(w, h) * pad
+    cx, cy = x + w / 2, y + h / 2
+    return f"{cx - side / 2:g} {cy - side / 2:g} {side:g} {side:g}"
+
+
 def main() -> None:
     inner = portrait_markup(rendered_dom())
     x, y, size, _ = (float(v) for v in HEAD_VIEWBOX.split())
@@ -146,11 +189,12 @@ def main() -> None:
             check=True,
         )
 
+    # Link preview: three-quarter view, turned toward the name on the left.
+    turned = portrait_markup(rendered_dom(aim_x=OG_AIM, settle=1.5, travel=OG_TRAVEL))
     og = f"""<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
 <rect width="1200" height="630" fill="{BG}"/>
-<svg x="655" y="60" width="510" height="510" viewBox="{HEAD_VIEWBOX}">{inner}</svg>
-<text x="105" y="330" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="112" font-weight="500" letter-spacing="-3" fill="{INK}">eric liu</text>
-<text x="108" y="392" font-family="Menlo, ui-monospace, monospace" font-size="27" letter-spacing="5" fill="{MUTED}">ERICTLIU.COM</text>
+<svg x="655" y="55" width="520" height="520" viewBox="{content_viewbox(turned)}">{turned}</svg>
+<text x="105" y="352" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="112" font-weight="500" letter-spacing="-3" fill="{INK}">eric liu</text>
 </svg>"""
     render(og, 1200, 630, HERE / "og.png")
 
