@@ -1,6 +1,22 @@
 # erictliu.com
 
-Static personal site. No build step — `index.html` and `support.js` are served as-is.
+Static personal site. No build step — `index.html` and `support.js` are served
+as-is. (`draw.js`/`draw.css` are a prebuilt vendored bundle; see Draw mode.)
+
+## Draw mode
+
+The `DRAW` button in the panel closes it and lays a transparent
+[drawesome](https://github.com/benjitaylor/drawesome) canvas over the whole
+page — the site itself is the paper, and the portrait keeps tracking the pen.
+`SAVE MASTERPIECE ↓` exports a PNG of the page as it looks that instant
+(background, portrait mid-pose, name) with the drawing on top. `DONE` or `Esc`
+leaves; minimizing the toolbar hides the pills with it.
+
+`draw.js` + `draw.css` are React + drawesome (MIT) bundled by
+`tools/draw-bundle/build.sh`, lazy-loaded on first use so the page itself stays
+light. To change the overlay (tools, placement, export), edit
+`tools/draw-bundle/entry.jsx`, run the build script, and bump the `V` constant
+in `openDraw()` in `index.html` — that string busts the old cached bundle.
 
 ## Local preview
 
