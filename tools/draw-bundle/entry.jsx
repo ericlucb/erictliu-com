@@ -3,7 +3,7 @@
 // talks to window.__drawesome.
 import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Draw } from "drawesome";
+import { Draw, SWATCHES_COMPACT } from "drawesome";
 import "drawesome/styles.css";
 
 let host = null;
@@ -29,6 +29,26 @@ const PILL_CSS = `
 #kDrawPills button[disabled]:hover { color:#a6a7ac; border-color:#e2e1dc; }
 #kDrawPills .arrow { font-size:14px; line-height:1; }
 #kDrawPills[data-stack="1"] { flex-direction:column; align-items:flex-start; }
+
+/* Compact chrome for phones: drawesome's sizes are fixed px, so shrink the
+   whole dock. The origin matches the anchored edge, and the entrance
+   animation is dropped because its keyframes would fight the transform. */
+.kDrawCompact .Draw_toolbar { animation:none !important; transform:scale(0.78); }
+.kDrawCompact[data-place="bottom"] .Draw_toolbar { transform-origin:50% 100%; }
+.kDrawCompact[data-place="left"] .Draw_toolbar { transform-origin:0% 50%; }
+/* Minimized on a portrait phone, drawesome's own disc keeps the bar's old
+   spot (its resting position is baked into the morph, not the dock), so hide
+   it there and offer #kDrawDot pinned to the bottom-right corner instead.
+   ~= matches the exact class token: *= would also hit the always-present
+   MorphBar_collapsedContent layer and hide the dock permanently. */
+.kDrawCompact[data-place="left"] .Draw_toolbar:has([class~="MorphBar_collapsed"]) {
+  visibility:hidden !important;
+}
+#kDrawDot { position:fixed; right:12px; bottom:12px; z-index:10; width:46px; height:46px;
+  visibility:hidden; display:flex; align-items:center; justify-content:center;
+  border-radius:50%; border:1px solid #e2e1dc; background:rgba(255,255,255,.95);
+  color:#141414; font-size:19px; cursor:pointer;
+  box-shadow:0 2px 8px rgba(0,0,0,.09); }
 `;
 
 // "Save Masterpiece" saves what you actually made: the page as it looks right
@@ -90,17 +110,38 @@ async function saveMasterpiece(handle) {
   setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
-function Overlay() {
-  // A phone has more height than width: stand the bar up and trim it, per the
-  // drawesome README's own recipe. Tracked live so rotating the phone re-lays
-  // the bar instead of keeping whichever layout it mounted with.
-  const [narrow, setNarrow] = useState(() => matchMedia("(max-width: 700px)").matches);
+// Live media-query state, so rotating the phone re-lays the bar instead of
+// keeping whichever layout it mounted with.
+function useMQ(query) {
+  const [on, setOn] = useState(() => matchMedia(query).matches);
   useEffect(() => {
-    const mq = matchMedia("(max-width: 700px)");
-    const sync = () => setNarrow(mq.matches);
+    const mq = matchMedia(query);
+    const sync = () => setOn(mq.matches);
+    // Environments exist where the viewport changes without a reliable mq
+    // change event (embedded webviews, emulated viewports), and a flip between
+    // the initial render's read and this subscription would be missed — so
+    // sync now, on resize, and on a slow poll as the backstop. setState with
+    // an unchanged value is a no-op, so the poll costs nothing.
+    sync();
     mq.addEventListener("change", sync);
-    return () => mq.removeEventListener("change", sync);
-  }, []);
+    addEventListener("resize", sync);
+    const iv = setInterval(sync, 600);
+    return () => {
+      mq.removeEventListener("change", sync);
+      removeEventListener("resize", sync);
+      clearInterval(iv);
+    };
+  }, [query]);
+  return on;
+}
+
+function Overlay() {
+  // compact: any phone-sized viewport in either orientation — trim the tools
+  // and shrink the chrome so bar plus pills fit on screen. A landscape phone
+  // is wider than 700px, which is why height is part of the test.
+  // stand: portrait phones get the bar on the left, per the drawesome README.
+  const compact = useMQ("(max-width: 700px), (max-height: 520px)");
+  const stand = useMQ("(max-width: 700px) and (orientation: portrait)");
 
   const handle = useRef(null);
   const pills = useRef(null);
@@ -111,68 +152,104 @@ function Overlay() {
   // collapses it to a disc), so follow it per frame — and while it IS the
   // disc, stay hidden with it.
   useEffect(() => {
-    let raf;
-    const tick = () => {
-      // The morph container is the bar's real chrome: its class flips to
-      // MorphBar_collapsed the moment Hide tools is clicked, while the rect
-      // only shrinks as the animation plays. Keying on the class makes the
-      // pills vanish on the click, not at the end of the morph.
+    // The morph container is the bar's real chrome: its class flips to
+    // MorphBar_collapsed the moment Hide tools is clicked, while the rect
+    // only shrinks as the animation plays. Keying on the class makes the
+    // pills vanish on the click, not at the end of the morph.
+    const place = () => {
+      // Scoped inside the dock: bare [class*="MorphBar_bar"] can hit one of
+      // drawesome's offscreen staging copies instead of the visible bar.
       const bar =
         host &&
-        (host.querySelector('[class*="MorphBar_bar"]') || host.querySelector(".Draw_toolbar"));
+        (host.querySelector('.Draw_toolbar [class*="MorphBar_bar"]') ||
+          host.querySelector(".Draw_toolbar"));
       const el = pills.current;
-      if (bar && el) {
-        const r = bar.getBoundingClientRect();
-        const w = el.offsetWidth, h = el.offsetHeight;
-        const minimized =
-          /collapsed/.test(String(bar.className)) || (r.width < 100 && r.height < 100);
-        if (minimized) {
-          el.style.visibility = "hidden";
-        } else {
-          const horizontal = r.width >= r.height;
-          const left = horizontal
-            ? r.left + (r.width - w) / 2
-            : Math.max(8, r.left + (r.width - w) / 2);
-          const top = horizontal ? r.top - h - 9 : Math.min(r.bottom + 9, innerHeight - h - 8);
-          el.style.left = Math.max(8, Math.min(left, innerWidth - w - 8)) + "px";
-          el.style.top = Math.max(8, top) + "px";
-          el.style.visibility = "visible";
-        }
+      if (!bar || !el) return;
+      const r = bar.getBoundingClientRect();
+      const w = el.offsetWidth, h = el.offsetHeight;
+      const minimized =
+        /\bMorphBar_collapsed\b/.test(String(bar.className)) ||
+        (r.width < 100 && r.height < 100);
+      // On a portrait phone the native disc is hidden (see the CSS above), so
+      // surface our corner dot as the way back; elsewhere the disc serves.
+      const dot = document.getElementById("kDrawDot");
+      const stand = el.dataset.stack === "1";
+      if (dot) dot.style.visibility = minimized && stand ? "visible" : "hidden";
+      if (minimized) {
+        el.style.visibility = "hidden";
+        return;
       }
-      raf = requestAnimationFrame(tick);
+      const horizontal = r.width >= r.height;
+      const left = horizontal
+        ? r.left + (r.width - w) / 2
+        : Math.max(8, r.left + (r.width - w) / 2);
+      const top = horizontal ? r.top - h - 9 : Math.min(r.bottom + 9, innerHeight - h - 8);
+      el.style.left = Math.max(8, Math.min(left, innerWidth - w - 8)) + "px";
+      el.style.top = Math.max(8, top) + "px";
+      el.style.visibility = "visible";
     };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    // rAF follows the morph smoothly, but throttled tabs stop firing it, so a
+    // slow interval and resize listeners keep the pills placed regardless.
+    let raf;
+    const loop = () => {
+      place();
+      raf = requestAnimationFrame(loop);
+    };
+    place();
+    loop();
+    const iv = setInterval(place, 350);
+    addEventListener("resize", place);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearInterval(iv);
+      removeEventListener("resize", place);
+    };
   }, []);
 
   return (
     <>
       <style>{PILL_CSS}</style>
-      <div style={{ position: "absolute", inset: 0 }}>
+      <div
+        style={{ position: "absolute", inset: 0 }}
+        className={compact ? "kDrawCompact" : undefined}
+        data-place={stand ? "left" : "bottom"}
+      >
         <Draw
           ref={handle}
           background="transparent"
           theme="light"
-          placement={narrow ? "left" : "bottom"}
-          inset={narrow ? 10 : 20}
-          tools={narrow ? ["pencil", "pen", "marker", "highlighter", "brush"] : undefined}
-          controls={narrow ? { opacity: false, custom: false } : undefined}
+          placement={stand ? "left" : "bottom"}
+          inset={compact ? 10 : 20}
+          tools={compact ? ["pencil", "pen", "marker", "highlighter", "brush"] : undefined}
+          controls={compact ? { opacity: false, custom: false } : undefined}
+          swatches={compact ? SWATCHES_COMPACT : undefined}
           drawWhenMinimized
           onChange={(strokes) => setHasInk(strokes.length > 0)}
         />
       </div>
-      <div id="kDrawPills" ref={pills} data-stack={narrow ? "1" : "0"}>
+      <div id="kDrawPills" ref={pills} data-stack={stand ? "1" : "0"}>
         <button
           type="button"
           disabled={!hasInk}
           onClick={() => handle.current && saveMasterpiece(handle.current)}
         >
-          SAVE MASTERPIECE <span className="arrow">↓</span>
+          SAVE <span className="arrow">↓</span>
         </button>
         <button type="button" onClick={close} aria-label="Stop drawing (Esc)">
           DONE
         </button>
       </div>
+      <button
+        id="kDrawDot"
+        type="button"
+        aria-label="Show drawing tools"
+        onClick={() => {
+          const hit = host && host.querySelector('.Draw_toolbar [class*="expandHit"]');
+          if (hit) hit.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        }}
+      >
+        ✎
+      </button>
     </>
   );
 }
