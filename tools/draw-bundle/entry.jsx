@@ -3,11 +3,27 @@
 // talks to window.__drawesome.
 import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Draw, SWATCHES_COMPACT } from "drawesome";
+import { Draw, SWATCHES_COMPACT, ToolIcon } from "drawesome";
 import "drawesome/styles.css";
 
 let host = null;
 let root = null;
+// For the expand-failure fallback: the live Draw handle, and strokes to
+// restore after a remount.
+let currentHandle = null;
+let pendingStrokes = null;
+
+function remountKeepingStrokes() {
+  try {
+    pendingStrokes = currentHandle && currentHandle.current
+      ? currentHandle.current.getStrokes()
+      : null;
+  } catch (e) {
+    pendingStrokes = null;
+  }
+  close();
+  open();
+}
 
 const onKey = (e) => {
   if (e.key === "Escape") {
@@ -36,19 +52,23 @@ const PILL_CSS = `
 .kDrawCompact .Draw_toolbar { animation:none !important; transform:scale(0.78); }
 .kDrawCompact[data-place="bottom"] .Draw_toolbar { transform-origin:50% 100%; }
 .kDrawCompact[data-place="left"] .Draw_toolbar { transform-origin:0% 50%; }
-/* Minimized on a portrait phone, drawesome's own disc keeps the bar's old
-   spot (its resting position is baked into the morph, not the dock), so hide
-   it there and offer #kDrawDot pinned to the bottom-right corner instead.
+/* Minimized on a phone, drawesome's own disc keeps the bar's old spot (its
+   resting position is baked into the morph, not the dock), so hide it and
+   offer #kDrawDot in a corner instead: bottom-left where the standing bar
+   lives in portrait, bottom-right in landscape. It wears the same current
+   tool the native disc would, poking into the disc from the top.
    ~= matches the exact class token: *= would also hit the always-present
    MorphBar_collapsedContent layer and hide the dock permanently. */
-.kDrawCompact[data-place="left"] .Draw_toolbar:has([class~="MorphBar_collapsed"]) {
+.kDrawCompact .Draw_toolbar:has([class~="MorphBar_collapsed"]) {
   visibility:hidden !important;
 }
-#kDrawDot { position:fixed; right:12px; bottom:12px; z-index:10; width:46px; height:46px;
-  visibility:hidden; display:flex; align-items:center; justify-content:center;
-  border-radius:50%; border:1px solid #e2e1dc; background:rgba(255,255,255,.95);
-  color:#141414; font-size:19px; cursor:pointer;
+#kDrawDot { position:fixed; bottom:12px; z-index:10; width:46px; height:46px;
+  visibility:hidden; display:flex; align-items:flex-start; justify-content:center;
+  padding:7px 0 0; overflow:hidden; border-radius:50%; border:1px solid #e2e1dc;
+  background:rgba(255,255,255,.95); cursor:pointer;
   box-shadow:0 2px 8px rgba(0,0,0,.09); }
+#kDrawDot[data-side="left"] { left:12px; right:auto; }
+#kDrawDot[data-side="right"] { right:12px; left:auto; }
 `;
 
 // "Save Masterpiece" saves what you actually made: the page as it looks right
@@ -146,6 +166,28 @@ function Overlay() {
   const handle = useRef(null);
   const pills = useRef(null);
   const [hasInk, setHasInk] = useState(false);
+  // What the corner dot wears: the active tool in the current ink, matching
+  // the native disc. Read from the toolbar DOM, since Draw doesn't report it.
+  const [dotTool, setDotTool] = useState({ id: "pencil", color: "#111111" });
+  const dotToolRef = useRef(dotTool);
+
+  // Hand the module the live handle, and restore the drawing after a
+  // remount-recovery (setStrokes resets undo history — a fair trade for
+  // never losing the picture).
+  useEffect(() => {
+    currentHandle = handle;
+    if (pendingStrokes) {
+      const s = pendingStrokes;
+      pendingStrokes = null;
+      const t = setTimeout(() => {
+        try {
+          handle.current && handle.current.setStrokes(s);
+          setHasInk(s.length > 0);
+        } catch (e) { /* nothing to restore */ }
+      }, 120);
+      return () => clearTimeout(t);
+    }
+  }, []);
 
   // Keep the pill glued to the toolbar: centred above a bar lying along the
   // bottom, tucked under one standing on the left. The bar moves (minimize
@@ -170,13 +212,28 @@ function Overlay() {
       const minimized =
         /\bMorphBar_collapsed\b/.test(String(bar.className)) ||
         (r.width < 100 && r.height < 100);
-      // On a portrait phone the native disc is hidden (see the CSS above), so
-      // surface our corner dot as the way back; elsewhere the disc serves.
+      // On phones the native disc is hidden (see the CSS above), so surface
+      // our corner dot as the way back; on desktop the native disc serves.
       const dot = document.getElementById("kDrawDot");
-      const stand = el.dataset.stack === "1";
-      if (dot) dot.style.visibility = minimized && stand ? "visible" : "hidden";
+      const compactNow = !!host.querySelector(".kDrawCompact");
+      if (dot) dot.style.visibility = minimized && compactNow ? "visible" : "hidden";
       if (minimized) {
         el.style.visibility = "hidden";
+        // Keep the dot wearing whatever the bar had in hand when it folded.
+        const TOOL_IDS = {
+          Pencil: "pencil", Pen: "pen", Fineliner: "fineliner", Marker: "marker",
+          Highlighter: "highlighter", Brush: "brush", "Fountain Pen": "fountain",
+          Eraser: "eraser",
+        };
+        const active = host.querySelector('.Draw_toolbar button[aria-pressed="true"]');
+        const id = TOOL_IDS[active && active.getAttribute("aria-label")] || dotToolRef.current.id;
+        const inkBtn = host.querySelector('.Draw_toolbar button[aria-label^="Ink colour"]');
+        const hex = inkBtn && (inkBtn.getAttribute("aria-label").match(/#[0-9a-fA-F]{6}/) || [])[0];
+        const next = { id, color: hex || dotToolRef.current.color };
+        if (next.id !== dotToolRef.current.id || next.color !== dotToolRef.current.color) {
+          dotToolRef.current = next;
+          setDotTool(next);
+        }
         return;
       }
       const horizontal = r.width >= r.height;
@@ -243,12 +300,30 @@ function Overlay() {
         id="kDrawDot"
         type="button"
         aria-label="Show drawing tools"
+        data-side={stand ? "left" : "right"}
         onClick={() => {
-          const hit = host && host.querySelector('.Draw_toolbar [class*="expandHit"]');
-          if (hit) hit.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+          const clickHit = () => {
+            const hit = host && host.querySelector('.Draw_toolbar [class*="expandHit"]');
+            if (hit) hit.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+            return !!hit;
+          };
+          const folded = () => {
+            const b = host && host.querySelector('.Draw_toolbar [class*="MorphBar_bar"]');
+            if (!b) return false;
+            const r = b.getBoundingClientRect();
+            return r.width < 100 && r.height < 100;
+          };
+          clickHit();
+          // The morph occasionally fails to unfold (seen under throttled
+          // tabs): retry once, then remount with the drawing carried over.
+          setTimeout(() => {
+            if (!folded()) return;
+            clickHit();
+            setTimeout(() => { if (folded()) remountKeepingStrokes(); }, 700);
+          }, 700);
         }}
       >
-        ✎
+        <ToolIcon id={dotTool.id} color={dotTool.color} size={34} />
       </button>
     </>
   );

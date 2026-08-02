@@ -109,7 +109,7 @@
     /* Sit the label hard right and cap it so long phrases wrap instead of
        reaching into the face. The head is ~0.135 of --pw either side of its
        centre and it moves as it tracks, so budget 0.155 and leave 50px clear. */
-    #kNav { right:10px !important; max-width:calc(var(--mr) + var(--pw) * 0.2825 - 60px) !important; text-align:right !important; line-height:1.5 !important; }
+    #kNav { right:12px !important; max-width:calc(var(--mr) + var(--pw) * 0.2825 - 60px) !important; justify-items:end !important; text-align:right !important; line-height:1.5 !important; }
     /* The body is centred on the toggle, which sits right of centre under the
        face. Twice the toggle's distance from the right edge is the widest it
        can be without running off screen. */
@@ -406,7 +406,7 @@ class Component extends DCLogic {
     if (window.__drawesome) { window.__drawesome.open(); return; }
     if (this._drawLoading) return;
     this._drawLoading = true;
-    const V = '15'; // bump when tools/draw-bundle is rebuilt, to bust caches
+    const V = '17'; // bump when tools/draw-bundle is rebuilt, to bust caches
     const css = document.createElement('link');
     css.rel = 'stylesheet'; css.href = './draw.css?v=' + V;
     document.head.appendChild(css);
