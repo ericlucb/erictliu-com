@@ -406,7 +406,7 @@ class Component extends DCLogic {
     if (window.__drawesome) { window.__drawesome.open(); return; }
     if (this._drawLoading) return;
     this._drawLoading = true;
-    const V = '5'; // bump when tools/draw-bundle is rebuilt, to bust caches
+    const V = '6'; // bump when tools/draw-bundle is rebuilt, to bust caches
     const css = document.createElement('link');
     css.rel = 'stylesheet'; css.href = './draw.css?v=' + V;
     document.head.appendChild(css);

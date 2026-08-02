@@ -157,6 +157,7 @@ function Overlay() {
           inset={narrow ? 10 : 20}
           tools={narrow ? ["pencil", "pen", "marker", "highlighter", "brush"] : undefined}
           controls={narrow ? { opacity: false, custom: false } : undefined}
+          drawWhenMinimized
           onChange={(strokes) => setHasInk(strokes.length > 0)}
         />
       </div>
