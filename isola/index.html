@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <title>Isola Quieta — live world</title>
-<link rel="modulepreload" href="./dist/main.js?v=v257">
+<link rel="modulepreload" href="./dist/main.js?v=v258">
 <style>
   html, body { margin: 0; height: 100%; overflow: hidden; background: #5d5f7e; }
   #app { position: fixed; inset: 0; }
@@ -17,7 +17,6 @@
     transition: opacity 1.4s ease, transform 1.4s ease;
   }
   #hud.used { opacity: 0; transform: translate(-50%, -50%) translateX(-5px); }
-  #hud.used #lookhint { pointer-events: none; }
   .hint-row { display: flex; align-items: center; gap: 12px; }
   .look-gesture { width: 81px; display: flex; justify-content: center; }
   .look-gesture svg { width: 64px; height: 32px; overflow: visible; }
@@ -30,18 +29,9 @@
   .move-keys kbd:first-child { grid-column: 2; }
   .move-keys kbd:nth-child(2) { grid-column: 1; }
   .move-keys kbd.held { background: rgba(244,239,227,.36); }
-  /* V246 - the esc key sits by the WASD keys (Eric: 'the esc dialogue should
-     be near the wasd like the esc key'): it pauses the mouse look, and the
-     hint is the button too. body.free is the paused state. */
-  #lookhint { pointer-events: auto; cursor: pointer; appearance: none; background: none; border: 0; padding: 0; margin: 0;
-    color: inherit; font: inherit; letter-spacing: inherit; text-align: left; }
-  #lookhint:focus-visible { outline: 1px solid rgba(244,239,227,.6); outline-offset: 4px; border-radius: 4px; }
-  #lookhint .key-box { width: 81px; display: flex; }
-  #lookhint kbd { padding: 0 7px; letter-spacing: .06em; }
-  #lookhint .lbl { display: inline-block; width: 140px; }   /* one width for both labels: the block is centred, so the keys would shift with the text */
-  #lookhint .when-free, body.free #lookhint .when-looking { display: none; }
-  body.free #lookhint .when-free { display: inline; }
-  .row-touch { display: none; }
+  /* the look is a drag: the cursor is a hand over the world, a closed one while it drags */
+  #app canvas { cursor: grab; }
+  body.dragging #app canvas { cursor: grabbing; }
   @media (prefers-reduced-motion: reduce) { #hud { transition: opacity .2s; } }
   /* V237 - TOUCH ('work on mobile too'): the canvas owns every touch (no
      scroll, no pinch-zoom, no double-tap zoom), one finger looks, a thumb
@@ -64,8 +54,8 @@
   #stick .lbl { position: absolute; left: 0; right: 0; bottom: -20px; text-align: center; color: #f4efe3;
     font: 11px/1 -apple-system, "SF Pro Text", sans-serif; letter-spacing: .08em; text-shadow: 0 1px 4px rgba(20,20,40,.4); }
   body.touch #hud { left: 50%; top: 42%; }   /* in the sky above the island, not over it */
-  body.touch .row-move, body.touch #lookhint { display: none; }   /* a finger drags to look and moves with the stick */
-  body.touch .row-touch { display: flex; }
+  body.touch .row-move { display: none; }   /* a finger drags to look and moves with the stick */
+  body.touch .look-gesture .mouse { display: none; }   /* the arrows stay, the mouse glyph goes */
   #fps {
     display: none;
     position: fixed; right: 14px; top: 12px; color: #efe9dc;
@@ -114,11 +104,11 @@
 </head>
 <body>
 <div id="app"></div>
-<div id="hud" aria-label="Use W A S D to move. Move the mouse to look around; Escape pauses that.">
+<div id="hud" aria-label="Use W A S D to move. Drag to look around.">
   <span class="hint-row row-move" aria-hidden="true"><span class="move-keys"><kbd data-key="w">W</kbd><kbd data-key="a">A</kbd><kbd data-key="s">S</kbd><kbd data-key="d">D</kbd></span><span>move</span></span>
-  <button id="lookhint" class="hint-row" type="button"><span class="key-box"><kbd>esc</kbd></span><span class="lbl"><span class="when-looking">stop looking around</span><span class="when-free">look around</span></span></button>
-  <span class="hint-row row-touch" aria-hidden="true"><span class="look-gesture">
+  <span class="hint-row row-look" aria-hidden="true"><span class="look-gesture">
     <svg viewBox="0 0 64 32" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" focusable="false">
+      <g class="mouse"><rect x="23" y="3" width="18" height="26" rx="8" fill="rgba(35,43,51,.19)"/><path d="M32 3v10h-9"/><path d="M24 12V11a8 8 0 0 1 7-7v8Z" fill="currentColor" fill-opacity=".3" stroke="none"/></g>
       <path d="M17 16H4m4-4-4 4 4 4m39-4h13m-4-4 4 4-4 4"/>
     </svg>
   </span><span>drag to look</span></span>
@@ -133,8 +123,8 @@
 // line and main.js's BUILD in step); ?cb=<x> busts it while developing
 const q = new URLSearchParams(location.search);
 // the height grids leave with the program, not after it (a <link preload> did this in Chrome; WebKit fetched them twice)
-window.GRIDS_FETCH = fetch('./world-grids.bin?v=v257');
-import((q.has('src') ? './src/main.js' : './dist/main.js') + '?v=v257' + (q.get('cb') ? '&cb=' + encodeURIComponent(q.get('cb')) : ''));
+window.GRIDS_FETCH = fetch('./world-grids.bin?v=v258');
+import((q.has('src') ? './src/main.js' : './dist/main.js') + '?v=v258' + (q.get('cb') ? '&cb=' + encodeURIComponent(q.get('cb')) : ''));
 </script>
 </body>
 </html>
