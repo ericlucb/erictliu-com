@@ -116,6 +116,8 @@ in the Cache API (`isola-world`) under that URL, and answers `{isola:'go'}`;
 the viewer finds it in the cache (no second download), decodes it while the
 ring spins full, and posts `ready`, at which point the little door swings
 open, the world fades in over the page, the portrait's animation loop pauses
-and the iframe takes focus. `LEAVE` (top left) or Esc closes it and restores
-ENTER. If the page never answers, the viewer loads the world itself after
+and the iframe takes focus. The open door is a history entry, so the
+browser's Back (or the phone's back gesture) closes it and restores ENTER;
+there is no LEAVE button and Esc is left to the world (it releases a held
+mouse). If the page never answers, the viewer loads the world itself after
 2.5 s, so `isola/` also works on its own.

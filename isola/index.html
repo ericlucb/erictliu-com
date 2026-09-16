@@ -52,6 +52,24 @@
   body.touch #hud { left: 50%; top: 42%; }   /* in the sky above the island, not over it */
   body.touch #hud .hint-row:first-child { display: none; }
   body.touch .look-gesture svg rect, body.touch .look-gesture svg path:nth-of-type(1), body.touch .look-gesture svg path:nth-of-type(2) { display: none; }   /* the arrows stay, the mouse goes */
+  .lk-touch { display: none; }
+  body.touch .lk-mouse { display: none; }
+  body.touch .lk-touch { display: inline; }
+  /* V239 - MOUSE LOOK (Eric: 'just follow the mouse when you enter so you
+     don't have to click around ... users can click x if they wanna get out
+     of it'): the view follows the cursor; the pill at the top right turns
+     that off and on. Hidden on touch, where the stick and the drag are it. */
+  #mlook {
+    position: fixed; right: calc(14px + env(safe-area-inset-right, 0px)); top: calc(12px + env(safe-area-inset-top, 0px));
+    appearance: none; background: rgba(35,43,51,.28); border: 1px solid rgba(244,239,227,.42); color: #f4efe3;
+    font: 11px/1 -apple-system, "SF Pro Text", sans-serif; letter-spacing: .12em; text-transform: uppercase;
+    padding: 8px 11px; border-radius: 999px; cursor: pointer; opacity: .78; backdrop-filter: blur(6px);
+    transition: opacity .4s, background .16s;
+  }
+  #mlook:hover { background: rgba(35,43,51,.5); opacity: 1; }
+  #mlook.off { opacity: .55; }
+  body.touch #mlook, body.locked #mlook { display: none; }
+  body.locked { cursor: none; }
   #fps {
     display: none;
     position: fixed; right: 14px; top: 12px; color: #efe9dc;
@@ -100,7 +118,7 @@
 </head>
 <body>
 <div id="app"></div>
-<div id="hud" aria-label="Use W A S D to move. Drag to look around.">
+<div id="hud" aria-label="Use W A S D to move. Move the mouse to look around; click to hold the mouse, Escape releases it.">
   <span class="hint-row" aria-hidden="true"><span class="move-keys"><kbd data-key="w">W</kbd><kbd data-key="a">A</kbd><kbd data-key="s">S</kbd><kbd data-key="d">D</kbd></span><span>move</span></span>
   <span class="hint-row" aria-hidden="true"><span class="look-gesture">
     <svg viewBox="0 0 64 32" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" focusable="false">
@@ -109,8 +127,9 @@
       <path d="M24 12V11a8 8 0 0 1 7-7v8Z" fill="currentColor" fill-opacity=".3" stroke="none"/>
       <path d="M17 16H4m4-4-4 4 4 4m39-4h13m-4-4 4 4-4 4"/>
     </svg>
-  </span><span>drag to look</span></span>
+  </span><span><span class="lk-mouse">move the mouse to look · click to hold it</span><span class="lk-touch">drag to look</span></span></span>
 </div>
+<button id="mlook" type="button" aria-pressed="true" title="Mouse look: the view follows the mouse. Click to turn it off.">✕ mouse look</button>
 <div id="fps"></div>
 <div id="stick" aria-label="Move stick"><div class="base"></div><div class="knob"></div><div class="lbl">move</div></div>
 <details id="panel" class="hud-panel">
@@ -156,7 +175,12 @@ import { bakeWorldTransform } from './bake-world-transform.js';
 
 // cache-buster: one label per build, so a reload re-uses the cached 117 MB
 // GLB instead of fetching it again (v115 stamped the clock on every load)
-const BUILD = 'v237';
+const BUILD = 'v239';
+// V239: the world file is versioned by its own content, not by BUILD - a
+// viewer-only deploy must not make every visitor download 58 MB again, and
+// the door's cache is keyed by this exact URL. scripts/stamp_world.mjs
+// writes it from the file's sha256 (optimize_glb.sh runs it; a test checks it).
+const WORLD_TAG = '19087ff5';
 // ?dev=1 shows the full LOOK panel (cameras, review views, painterly dials);
 // visitors get only the settings control (V207)
 const DEV = new URLSearchParams(location.search).has('dev');
@@ -461,10 +485,33 @@ const moveHint = document.getElementById('hud');
 // Drag-to-look supplies direction; forward/backward follow the viewing ray.
 const FLY = { on: true, vel: new THREE.Vector3(), yaw: 0, pitch: 0, roll: 0,
               lookX: 0, lookY: 0, drag: false, lastX: 0, lastY: 0, fov0: heroFov(innerWidth / innerHeight) };
+// V239 - MOUSE LOOK. Three ways to look, one controller:
+//   hover - the default on a mouse: the view follows the cursor's place in
+//           the frame, +-70 deg of yaw and +-28 deg of pitch at the edges,
+//           a small dead zone at the centre, eased; no click needed.
+//   hold  - a click in the world asks for the Pointer Lock; the mouse then
+//           turns the view without bounds (the game way); Esc releases it.
+//   drag  - always there: press and move turns the base direction. On touch
+//           it is the only way (with the stick), and hover never runs.
+// The base direction (FLY.yaw/pitch) is what drag, hold and LOOKAT set; the
+// hover offset (HOVER.x/y) sits on top and is held still during a drag or
+// a hold, then re-based on release so the view never jumps. The pill at the
+// top right (#mlook) switches hover off and on. Off in the capture harness.
+const HOVER = { on: false, seen: false, locked: false, x: 0, y: 0, mx: 0.5, my: 0.5 };
+const HOVER_X = 70 * Math.PI / 180, HOVER_Y = 28 * Math.PI / 180, HOVER_DEAD = 0.06;
+function hoverTarget() {
+  const ease = (v) => { const a = Math.abs(v); if (a < HOVER_DEAD) return 0; const t = (a - HOVER_DEAD) / (1 - HOVER_DEAD); return Math.sign(v) * t * t * (3 - 2 * t); };
+  return [-ease((HOVER.mx - 0.5) * 2) * HOVER_X, -ease((HOVER.my - 0.5) * 2) * HOVER_Y];
+}
+function rebaseHover() {           // keep the view where it is, move the split between base and hover
+  if (!HOVER.on || !HOVER.seen || HOVER.locked) return;
+  const [tx, ty] = hoverTarget();
+  FLY.yaw += HOVER.x - tx; FLY.pitch += HOVER.y - ty; HOVER.x = tx; HOVER.y = ty;
+}
 function flySyncFromCamera() {
   const d = new THREE.Vector3(); camera.getWorldDirection(d);
-  FLY.pitch = Math.asin(THREE.MathUtils.clamp(d.y, -1, 1));
-  FLY.yaw = Math.atan2(-d.x, -d.z);
+  FLY.pitch = Math.asin(THREE.MathUtils.clamp(d.y, -1, 1)) - HOVER.y;   // the camera's direction is base + hover
+  FLY.yaw = Math.atan2(-d.x, -d.z) - HOVER.x;
   FLY.roll = 0; FLY.vel.set(0, 0, 0); FLY.lookX = FLY.lookY = 0;
 }
 // A VERIFICATION HANDLE.  `window.CAM` has been exposed for a while, but moving
@@ -541,12 +588,13 @@ function enableTouch() {
   if (document.body.classList.contains('touch')) return;
   document.body.classList.add('touch');
   moveHint.setAttribute('aria-label', 'Drag to look around. Use the stick to move.');
+  if (HOVER.on) setHover(false);
 }
 renderer.domElement.addEventListener('pointerdown', (e) => {
-  if (!FLY.on || e.button > 1) return;
+  if (!FLY.on || e.button > 1 || HOVER.locked) return;
   if (e.pointerType === 'touch') enableTouch();
   if (FLY.drag) return;                      // one finger looks; another is ignored
-  FLY.drag = true; FLY.dragId = e.pointerId; FLY.lastX = e.clientX; FLY.lastY = e.clientY;
+  FLY.drag = true; FLY.dragId = e.pointerId; FLY.lastX = e.clientX; FLY.lastY = e.clientY; FLY.dragMoved = 0;
   try { renderer.domElement.setPointerCapture(e.pointerId); } catch (_) {}
 });
 addEventListener('pointermove', (e) => {
@@ -554,10 +602,39 @@ addEventListener('pointermove', (e) => {
   const sens = e.pointerType === 'touch' ? 0.0030 : 0.0016;   // mouse: was 0.0028 - 'moves way too much'; a thumb travels less
   FLY.lookX -= (e.clientX - FLY.lastX) * sens;
   FLY.lookY -= (e.clientY - FLY.lastY) * sens;
+  FLY.dragMoved += Math.abs(e.clientX - FLY.lastX) + Math.abs(e.clientY - FLY.lastY);
   FLY.lastX = e.clientX; FLY.lastY = e.clientY;
 });
-addEventListener('pointerup', (e) => { if (e.pointerId === FLY.dragId) FLY.drag = false; });
-addEventListener('pointercancel', (e) => { if (e.pointerId === FLY.dragId) FLY.drag = false; });
+addEventListener('pointerup', (e) => { if (e.pointerId === FLY.dragId) { FLY.drag = false; rebaseHover(); } });
+addEventListener('pointercancel', (e) => { if (e.pointerId === FLY.dragId) { FLY.drag = false; rebaseHover(); } });
+// hover: where the mouse is in the frame; hold: the locked mouse's motion
+addEventListener('mousemove', (e) => {
+  if (document.body.classList.contains('touch')) return;      // a tap's synthetic mouse events
+  if (HOVER.locked) { FLY.lookX -= e.movementX * 0.0016; FLY.lookY -= e.movementY * 0.0016; return; }
+  HOVER.mx = e.clientX / innerWidth; HOVER.my = e.clientY / innerHeight; HOVER.seen = true;
+});
+renderer.domElement.addEventListener('click', () => {
+  if (!HOVER.on || !FLY.on || HOVER.locked || FLY.dragMoved > 4) return;   // a drag is not a click
+  try { const p = renderer.domElement.requestPointerLock({ unadjustedMovement: true }); if (p && p.catch) p.catch(() => {}); } catch (_) {}
+});
+document.addEventListener('pointerlockchange', () => {
+  HOVER.locked = document.pointerLockElement === renderer.domElement;
+  document.body.classList.toggle('locked', HOVER.locked);
+  if (!HOVER.locked) rebaseHover();
+});
+document.addEventListener('pointerlockerror', () => { HOVER.locked = false; document.body.classList.remove('locked'); });
+const mlookEl = document.getElementById('mlook');
+function setHover(on) {
+  if (!on && HOVER.locked) { try { document.exitPointerLock(); } catch (_) {} }
+  if (!on) { FLY.yaw += HOVER.x; FLY.pitch += HOVER.y; HOVER.x = HOVER.y = 0; }   // bake the offset in: no jump
+  HOVER.on = on;
+  mlookEl.setAttribute('aria-pressed', String(on)); mlookEl.classList.toggle('off', !on);
+  mlookEl.textContent = on ? '✕ mouse look' : '○ mouse look';
+  mlookEl.title = on ? 'Mouse look: the view follows the mouse. Click to turn it off.' : 'Mouse look is off: drag to look. Click to turn it on.';
+}
+mlookEl.addEventListener('click', () => setHover(!HOVER.on));
+setHover(!TOUCH && !Q.has('capture') && Q.get('look') !== 'drag');
+window.HOVER = HOVER; window.setHover = setHover;
 // the thumb stick: its own pointer, captured; magnitude past a 12 % dead
 // zone is the speed, direction is forward/right in the camera's frame
 const stickEl = document.getElementById('stick'), stickKnob = stickEl.querySelector('.knob');
@@ -593,9 +670,14 @@ function fly(dt) {
   FLY.lookX -= ax; FLY.lookY -= ay;
   FLY.yaw += ax;
   FLY.pitch = THREE.MathUtils.clamp(FLY.pitch + ay, -1.25, 1.25);
-  const cp = Math.cos(FLY.pitch);
-  const fwd = _fwd.set(-Math.sin(FLY.yaw) * cp, Math.sin(FLY.pitch), -Math.cos(FLY.yaw) * cp);
-  const rgt = _rgt.set(Math.cos(FLY.yaw), 0, -Math.sin(FLY.yaw));
+  if (HOVER.on && HOVER.seen && !FLY.drag && !HOVER.locked) {   // the hover offset eases toward the cursor
+    const [tx, ty] = hoverTarget(), kh = 1 - Math.exp(-dt * 6);
+    HOVER.x += (tx - HOVER.x) * kh; HOVER.y += (ty - HOVER.y) * kh;
+  }
+  const yaw = FLY.yaw + HOVER.x, pitch = THREE.MathUtils.clamp(FLY.pitch + HOVER.y, -1.25, 1.25);
+  const cp = Math.cos(pitch);
+  const fwd = _fwd.set(-Math.sin(yaw) * cp, Math.sin(pitch), -Math.cos(yaw) * cp);
+  const rgt = _rgt.set(Math.cos(yaw), 0, -Math.sin(yaw));
   const want = _mv.set(0, 0, 0);
   if (KEYS.w) want.add(fwd);  if (KEYS.s) want.sub(fwd);
   if (KEYS.d) want.add(rgt);  if (KEYS.a) want.sub(rgt);
@@ -616,7 +698,7 @@ function fly(dt) {
   const rx = camera.position.x - 14.5, rz = camera.position.z, rr = Math.hypot(rx, rz);
   if (rr > 300) { camera.position.x = 14.5 + rx * 300 / rr; camera.position.z = rz * 300 / rr; }
   FLY.roll = 0;
-  camera.rotation.set(FLY.pitch, FLY.yaw, 0, 'YXZ');
+  camera.rotation.set(pitch, yaw, 0, 'YXZ');
   collideCamera(FLY.vel);
   controls.target.copy(camera.position).addScaledVector(fwd, 60);   // coherent for a mode switch
 }
@@ -1723,7 +1805,7 @@ const WORLD_URL = (() => {
   try { const u = new URL(w); if (u.protocol === 'https:' && WORLD_HOSTS.some(h => u.hostname === h || u.hostname.endsWith('.' + h))) return u.href; } catch (e) {}
   console.warn('world: ignoring ' + w + ' (host not allowed)'); return null;
 })();
-const GLB_URL = WORLD_URL || './island_world.glb?v=' + BUILD + '-flat4' + (GLB_CB ? '&cb=' + encodeURIComponent(GLB_CB) : '');
+const GLB_URL = WORLD_URL || './island_world.glb?v=' + WORLD_TAG + (GLB_CB ? '&cb=' + encodeURIComponent(GLB_CB) : '');
 const GLB_ABS = new URL(GLB_URL, location.href).href;
 window.WORLD_URL = WORLD_URL;
 if (EMBED) {
@@ -2651,6 +2733,7 @@ function releaseMovement() {
   FLY.drag = false; FLY.lookX = FLY.lookY = 0; FLY.vel.set(0, 0, 0);
   stickEnd();
 }
+addEventListener('mouseleave', () => {});   // (the hover holds its last target when the cursor leaves the frame)
 addEventListener('blur', releaseMovement);
 addEventListener('focusin', e => { if (isEditingControl(e.target)) releaseMovement(); });
 addEventListener('visibilitychange', () => { if (document.hidden) releaseMovement(); });
