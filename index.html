@@ -73,18 +73,17 @@
   #kIcons .ic svg { width:clamp(18px, min(1.5vw, 2.6vh), 24px); height:clamp(18px, min(1.5vw, 2.6vh), 24px); display:block; transition:transform .35s ease; }
   #kIcons .ic span { position:absolute; top:calc(100% - 16px); left:50%; transform:translateX(-50%); white-space:nowrap; pointer-events:none;
     font:clamp(8px, min(0.7vw, 1.3vh), 10px)/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing:.15em; opacity:0; transition:opacity .18s; }
-  #kIcons .ic:hover, #kIcons .ic:focus-visible, #kIcons .ic[data-on="1"], #kIcons .ic[aria-expanded="true"] { color:#141414; }
-  #kIcons .ic:hover span, #kIcons .ic:focus-visible span { opacity:1; }
+  #kIcons .ic:hover, #kIcons .ic:focus-visible, #kIcons .ic[data-on="1"], #kIcons .ic[aria-expanded="true"], body:has(#kDrawHost) #kDraw { color:#141414; }   /* (DRAW is lit while its overlay is up) */
+  #kIcons .ic:hover span, #kIcons .ic:focus-visible span, body:has(#kDrawHost) #kDraw span { opacity:1; }
   #kIcons .ic:focus-visible { outline:none; }
   #kIcons #kPanelT:hover svg, #kIcons #kPanelT[aria-expanded="true"] svg { transform:rotate(60deg); }
-  #kIcons #kReset:hover svg { transform:rotate(-40deg); }
   @media (hover: none) {
     #kIcons .ic { display:inline-flex; align-items:center; gap:7px; padding:10px 9px; }
     #kIcons .ic svg { width:24px; height:24px; }
     #kIcons .ic span { display:none; position:static; transform:none; opacity:1; font-size:10px; }
-    #kIcons .ic[data-on="1"] span, #kIcons .ic[aria-expanded="true"] span, #kIcons .ic.said span { display:inline; }
+    #kIcons .ic[data-on="1"] span, #kIcons .ic[aria-expanded="true"] span, #kIcons .ic.said span, body:has(#kDrawHost) #kDraw span { display:inline; }
   }
-  body:has(#kDrawHost) #kPanel { display:none !important; }   /* drawing: the bar has the bottom of the screen */
+  @media (hover: none) { body:has(#kDrawHost) #kPanel { display:none !important; } }   /* a phone drawing: the bar has the bottom of the screen; DONE closes it */
   /* Mobile browsers report 100vh as the height with the toolbars hidden, so a
      panel sized against it runs off under Safari's bottom bar. dvh tracks the
      height actually on screen; --vph falls back to vh where dvh is missing. */
@@ -317,7 +316,6 @@
       <button id="kDance" type="button" class="ic" data-on="0" aria-label="Dance"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V6l10-2v11"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="15" r="2.5"/></svg><span>DANCE</span></button>
       <button id="kDraw" type="button" class="ic" aria-label="Draw"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20l3.5-.7L19 7.8a2 2 0 0 0 0-2.8l-.9-.9a2 2 0 0 0-2.8 0L3.8 15.6 3 19.2z"/><path d="M13.5 6.5l3.9 3.9"/></svg><span>DRAW</span></button>
       <button id="kShuffle" type="button" class="ic" aria-label="Shuffle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h3.5c1.4 0 2.7.7 3.5 1.9L14 15.1c.8 1.2 2.1 1.9 3.5 1.9H21"/><path d="M3 17h3.5c1.4 0 2.7-.7 3.5-1.9"/><path d="M14 8.9c.8-1.2 2.1-1.9 3.5-1.9H21"/><path d="M18.5 4.5L21 7l-2.5 2.5M18.5 14.5L21 17l-2.5 2.5"/></svg><span>SHUFFLE</span></button>
-      <button id="kReset" type="button" class="ic" aria-label="Reset"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.6-5.9"/><path d="M4 4v5h5"/></svg><span>RESET</span></button>
       <button id="kPanelT" type="button" class="ic" aria-expanded="false" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span>SETTINGS</span></button>
     </div>
     <div id="kPanelB" style="display:none; box-sizing:border-box; gap:10px; position:absolute; top:calc(100% + 9px); left:50%; transform:translateX(-50%); width:min(452px, 88vw); padding:12px 14px 13px; background:rgba(255,255,255,.94); border:1px solid #e2e1dc; border-radius:11px; backdrop-filter:blur(7px); box-shadow:0 8px 30px rgba(20,20,20,.07); max-height:calc(100vh - 120px); overflow:auto;">
@@ -439,7 +437,7 @@ const EAR = [['M', [-15.6, -17.4]], ['C', [-20.1, -13, -22.4, -4.4, -21.5, 4.4]]
   ['C', [-20, 16.8, -13.3, 23, -6, 21.3]], ['C', [-2.2, 19.5, 0, 15, -1.5, 8.8]]];
 const IDS = ['kStage','kSvg','kHead','kFace','kFaceLine','kHair','kHairSh','kChinSh','kChinHead','kClipHost','kFeatIn','kFeat','kFeatShHost','kFeatShIn',
   'kEarL','kEarR','kStemL','kStemR','kBrows','kFeatShOff','kNose','kNoseC','kNoseHost','kNoseIn','kMouth','kMouthP','kPupL','kPupR',
-  'kNeckL','kNeckR','kNeckFill','kReset','kNeckClipP','kHairClip','kHairP','kHairShP','kLegacy','kStats','kReadout','kBar','kDance'];
+  'kNeckL','kNeckR','kNeckFill','kNeckClipP','kHairClip','kHairP','kHairShP','kLegacy','kStats','kReadout','kBar','kDance'];
 
 // Background music for DANCE MODE. Put an audio file next to index.html and
 // point `src` at it — .mp3, .m4a and .ogg all work. If `src` is empty or the
@@ -867,19 +865,10 @@ class Component extends DCLogic {
       }
       if (t.id === 'kDance') { this.toggleDance(); return; }
       if (t.id === 'kShuffle') { this.shuffle(); return; }
-      if (t.id === 'kDraw') { this.setPanel(false); this.openDraw(); return; }
+      if (t.id === 'kDraw') { this.setPanel(false); if (document.getElementById('kDrawHost') && window.__drawesome) window.__drawesome.close(); else this.openDraw(); return; }   // a toggle: the second click closes it
       if (t.id === 'kLife') {
         this.props.idleLife = this.props.idleLife === false;
         t.setAttribute('data-on', this.props.idleLife ? '1' : '0');
-        return;
-      }
-      if (t.id === 'kReset') {
-        const D = { travel: 76, responsiveness: 1.75, springiness: 0.9, roll: 6, hairWrap: 1,
-          pitchDepth: 0.62, idleLife: true };
-        for (const k in D) this.props[k] = D[k];
-        if (this.dance) this.toggleDance();
-        this.applyTheme();
-        this.syncPanel();
         return;
       }
       if (t.id === 'kPanelT') {
