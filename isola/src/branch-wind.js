@@ -4,7 +4,18 @@
 // they stay so on the GPU (a third of the bytes) and are read through the
 // uniforms, under the same names. Without it, float32 as before.
 export const BRANCH_WIND_GLSL = `
-#ifdef TREE_Q
+#ifdef TREE_TAB
+// V251: one row per sub-branch / leaf in a float texture, five texels a row
+// (broot.xyz bmeta.x | bmeta.yz sroot.xy | sroot.z smeta.xyz | pivot.xyz axis.x | axis.yz seed -);
+// the vertex carries the row's id
+attribute float _tree_id;
+uniform highp sampler2D uTreeTab; uniform float uTreeTabW;
+vec4 treeRow(int k) { int i = int(_tree_id + 0.5) * 5 + k; int w = int(uTreeTabW); return texelFetch(uTreeTab, ivec2(i - (i / w) * w, i / w), 0); }
+#define _broot (treeRow(0).xyz)
+#define _bmeta (vec3(treeRow(0).w, treeRow(1).xy))
+#define _sroot (vec3(treeRow(1).zw, treeRow(2).x))
+#define _smeta (treeRow(2).yzw)
+#elif defined(TREE_Q)
 attribute vec3 _brootq; attribute vec3 _bmetaq; attribute vec3 _srootq; attribute vec3 _smetaq;
 uniform vec3 uBrootC, uBrootH, uBmetaC, uBmetaH, uSrootC, uSrootH, uSmetaC, uSmetaH;
 #define _broot (uBrootC + uBrootH * _brootq)

@@ -1,7 +1,11 @@
 // Each leaf rotates about its authored petiole. The same transform drives
 // visible geometry, changing normals, water reflections and the shadow pass.
 export const LEAF_WIND_GLSL = `
-#ifdef TREE_Q
+#ifdef TREE_TAB
+#define _leaf_pivot (treeRow(3).xyz)
+#define _leaf_axis (vec3(treeRow(3).w, treeRow(4).xy))
+#define _leaf_seed (treeRow(4).z)
+#elif defined(TREE_Q)
 attribute vec3 _leaf_pivotq; attribute vec3 _leaf_axisq; attribute float _leaf_seedq;
 uniform vec3 uLeafPivotC, uLeafPivotH, uLeafAxisC, uLeafAxisH; uniform float uLeafSeedC, uLeafSeedH;
 #define _leaf_pivot (uLeafPivotC + uLeafPivotH * _leaf_pivotq)

@@ -23,7 +23,8 @@
     "houseGarden": "WEB_HM_home_garden_",
     "houseFlashing": "WEB_HM_home_flashing_",
     "houseChimney": "WEB_HM_home_chimney_",
-    "path": "WEB_path_"
+    "path": "WEB_path_",
+    "treeTable": "WEB_tree_table_"
   },
   "substrings": {
     "house": "home",

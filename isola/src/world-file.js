@@ -3,8 +3,8 @@
 // optimize_glb.sh runs that, tests/world-tag.test.mjs checks it): the URL is
 // keyed by the world, not the viewer, so a viewer-only deploy never makes a
 // visitor download it again, and the door's cache entry stays valid.
-export const WORLD_TAG = '2c36cb00';
-export const WORLD_BYTES = 68978244;   // the file's raw size (stamped with the tag): a gzip host's content-length is the compressed size, so the ring uses this
+export const WORLD_TAG = '2d65b32b';
+export const WORLD_BYTES = 67643908;   // the file's raw size (stamped with the tag): a gzip host's content-length is the compressed size, so the ring uses this
 // ?world=<https URL> names a copy hosted elsewhere (R2 with a CORS rule for
 // the site); hosts are allow-listed so a shared link cannot point the viewer
 // at an arbitrary file. Dev: ?cb=<x> busts the file's cache, ?glbfile=<name>

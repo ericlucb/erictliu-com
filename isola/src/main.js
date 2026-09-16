@@ -39,7 +39,7 @@ import { installStats } from './stats.js';
 
 // cache-buster: one label per build, so a reload re-uses the cached 117 MB
 // GLB instead of fetching it again (v115 stamped the clock on every load)
-const BUILD = 'v250';
+const BUILD = 'v251';
 // V242: the world's parse finishes in ~200 ms now (meshopt), sooner than
 // this module finishes evaluating - it suspends on later top-level awaits -
 // so the load callback must wait for the module's last line, or it reads
@@ -1092,15 +1092,50 @@ const WIND_GLSL = `
 // readers go through qAttr(). Position stays float32: the tree's shader
 // code reads it in metres in a dozen places.
 const GPU_QUANT = new Set(['_BROOT', '_BMETA', '_SROOT', '_SMETA', '_LEAF_PIVOT', '_LEAF_AXIS', '_LEAF_SEED']);
-const hasAttr = (g, name) => !!(g.attributes[name] || g.attributes[name + 'q']);
+const TREE_COLS = { _broot: 0, _bmeta: 3, _sroot: 6, _smeta: 9, _leaf_pivot: 12, _leaf_axis: 15, _leaf_seed: 18 };   // offsets in a 20-float row
+const hasAttr = (g, name) => !!(g.attributes[name] || g.attributes[name + 'q'] || (g.userData.treeRows && name in TREE_COLS));
 function qAttr(g, name) {          // getX/getY/getZ in metres, whichever way the attribute is stored
   const a = g.attributes[name]; if (a) return a;
+  const T = g.userData.treeRows;   // V251: the table - the vertex's id picks the row
+  if (T && name in TREE_COLS) { const off = TREE_COLS[name], rows = T.rows, ids = T.ids; const get = (i, k) => rows[ids.getX(i) * 20 + off + k]; return { count: ids.count, getX: (i) => get(i, 0), getY: (i) => get(i, 1), getZ: (i) => get(i, 2) }; }
   const aq = g.attributes[name + 'q'], q = g.userData.quantGpu && g.userData.quantGpu[name];
   if (!aq || !q) return null;
   const get = (i, k) => q.c[k] + q.h[k] * aq.getComponent(i, k);   // (getComponent denormalises the short)
   return { count: aq.count, getX: (i) => get(i, 0), getY: (i) => get(i, 1), getZ: (i) => get(i, 2) };
 }
-function treeQuantUniforms(g) {    // the TREE_Q uniforms for one geometry, or null when it ships float32
+// V251 - THE TREE'S TABLES. The optimiser replaced the seven per-vertex
+// attributes with one _tree_id and a POINTS node holding one record per
+// sub-branch / leaf (scripts/optimize_glb.py). Read once per table into a
+// float texture (RGBA32F, five texels a record) for the shader (TREE_TAB in
+// branch-wind.js) and a Float32Array for the CPU readers (qAttr).
+const TREE_TABLES = new Map();
+function attachTreeTable(g, root) {
+  const name = g.userData.treeTable, ids = g.attributes._tree_id; if (!name || !ids) return;
+  let T = TREE_TABLES.get(name);
+  if (!T) {
+    const node = root.getObjectByName(name), tg = node && (node.geometry || node.children[0]?.geometry);
+    if (!tg) { console.warn('tree table missing: ' + name); return; }
+    const col = (sem) => {   // a column in metres, whatever state the visit left it in (raw int16 + extras.quant, dequantised float32, or the q form)
+      const key = sem === '_BROOT' ? 'position' : sem.toLowerCase();
+      const a = tg.attributes[key] || tg.attributes[key + 'q'];
+      const q = (tg.userData.quant && tg.userData.quant[sem === '_BROOT' ? 'POSITION' : sem]) || (tg.userData.quantGpu && tg.userData.quantGpu[key]);   // (the root is the table's POSITION)
+      const src = a.isInterleavedBufferAttribute ? a.data.array : a.array, isInt = src instanceof Int16Array;
+      return { count: a.count, n: a.itemSize, get: (i, k) => isInt ? q.c[k] + q.h[k] * a.getComponent(i, k) : a.getComponent(i, k) };
+    };
+    const cols = ['_BROOT', '_BMETA', '_SROOT', '_SMETA', '_LEAF_PIVOT', '_LEAF_AXIS', '_LEAF_SEED'].map(col);
+    const n = cols[0].count, rows = new Float32Array(n * 20);
+    for (let i = 0; i < n; i++) { let o = i * 20; for (const c of cols) for (let k = 0; k < c.n; k++) rows[o++] = c.get(i, k); }
+    const W = 1024, H = Math.ceil(n * 5 / W), px = new Float32Array(W * H * 4); px.set(rows.subarray(0, Math.min(rows.length, W * H * 4)));
+    const tex = new THREE.DataTexture(px, W, H, THREE.RGBAFormat, THREE.FloatType); tex.magFilter = tex.minFilter = THREE.NearestFilter; tex.needsUpdate = true;
+    T = { rows, tex, n, uniforms: { uTreeTab: { value: tex }, uTreeTabW: { value: W } } };
+    TREE_TABLES.set(name, T);
+    node.visible = false; node.removeFromParent();   // read; nothing draws it
+    console.info(`tree table ${name}: ${n} records, ${W}x${H} float texels`);
+  }
+  g.userData.treeRows = { rows: T.rows, ids };
+}
+function treeQuantUniforms(g) {    // the TREE_TAB / TREE_Q uniforms for one geometry, or null when it ships float32
+  if (g.userData.treeRows) { const T = TREE_TABLES.get(g.userData.treeTable); return { __define: 'TREE_TAB', ...T.uniforms }; }
   const qg = g.userData.quantGpu; if (!qg) return null;
   const U = {}, names = { _broot: 'Broot', _bmeta: 'Bmeta', _sroot: 'Sroot', _smeta: 'Smeta', _leaf_pivot: 'LeafPivot', _leaf_axis: 'LeafAxis', _leaf_seed: 'LeafSeed' };
   for (const [attr, u] of Object.entries(names)) {
@@ -1108,14 +1143,14 @@ function treeQuantUniforms(g) {    // the TREE_Q uniforms for one geometry, or n
     U['u' + u + 'C'] = { value: q.c.length === 1 ? q.c[0] : new THREE.Vector3(...q.c) };
     U['u' + u + 'H'] = { value: q.h.length === 1 ? q.h[0] : new THREE.Vector3(...q.h) };
   }
-  return U;
+  return { __define: 'TREE_Q', ...U };
 }
 function windify(material, kind, hasHeight = false, scl = [1, 1, 1], hasPhase = false, hasRoot = false, rootRel = false, treeQ = null) {
   const [SX, SY, SZ] = scl.map(v => v.toFixed(4));
-  if (kind === 'tree' && treeQ) material.defines = Object.assign(material.defines || {}, { TREE_Q: '' });   // in the program prefix, ahead of the GLSL that tests it
+  if (kind === 'tree' && treeQ) material.defines = Object.assign(material.defines || {}, { [treeQ.__define]: '' });   // in the program prefix, ahead of the GLSL that tests it
   material.onBeforeCompile = (sh) => {
     sh.uniforms.uWt = WIND.t;
-    if (kind === 'tree' && treeQ) Object.assign(sh.uniforms, treeQ);
+    if (kind === 'tree' && treeQ) for (const [k, u] of Object.entries(treeQ)) if (k !== '__define') sh.uniforms[k] = u;
     sh.uniforms.uMirror = MIRROR;
     sh.uniforms.uLod = LOD;
     sh.uniforms.uMirrorKeep = MIRROR_KEEP;
@@ -1673,6 +1708,8 @@ if (worldBuf) loader.parse(worldBuf, './', async (gltf) => {
       o.geometry.boundingBox = null; o.geometry.boundingSphere = null; o.geometry.computeBoundingSphere();
       if (DEV) (T_LOAD.dequant = T_LOAD.dequant || []).push([o.name, Math.round(performance.now() - tq), 'sphere', Math.round(performance.now() - ts)]);
     }
+    if (o.geometry.attributes._tree_id) attachTreeTable(o.geometry, root);   // V251
+    if (o.name.startsWith(M.prefixes.treeTable)) { o.visible = false; return; }   // (read by attachTreeTable; removed there)
     if (o.name.includes(M.substrings.clothes)) {   // the cloth rig writes float normals back into this array every frame
       const nA = o.geometry.attributes.normal;
       if (nA && !(nA.array instanceof Float32Array)) { const out = new Float32Array(nA.count * 3); for (let i = 0; i < nA.count; i++) for (let k = 0; k < 3; k++) out[i * 3 + k] = nA.getComponent(i, k); o.geometry.setAttribute('normal', new THREE.BufferAttribute(out, 3)); }
