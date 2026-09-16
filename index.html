@@ -511,7 +511,11 @@ class Component extends DCLogic {
         frame.contentWindow.postMessage(world ? { isola: 'go', world } : { isola: 'go' }, location.origin);
         if (world) { setBar(0.80); creepTo(0.88); }   // decoding starts; the viewer's stages take it from here
       } else if (m.type === 'progress') { if (m.total) setBar(0.02 + 0.78 * m.loaded / m.total); }
-      else if (m.type === 'stage') { const ceil = { decoding: 0.88, expanding: 0.95, warming: 0.99 }[m.stage]; if (ceil) { setBar(Math.min(ceil - 0.06, Math.max(shown, 0.80))); creepTo(ceil); } }
+      else if (m.type === 'stage') {
+        const ceil = { decoding: 0.88, expanding: 0.95, warming: 0.99 }[m.stage];
+        if (m.stage === 'expanding' && typeof m.frac === 'number') { if (creep) { clearInterval(creep); creep = null; } setBar(0.88 + 0.07 * Math.min(1, m.frac)); }   // real progress from the viewer
+        else if (ceil) { setBar(Math.min(ceil - 0.06, Math.max(shown, 0.80))); creepTo(ceil); }
+      }
       else if (m.type === 'ready') open();
       else if (m.type === 'error') fail(m.message || 'the island could not load');
     };

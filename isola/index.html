@@ -179,7 +179,7 @@ import { bakeWorldTransform } from './bake-world-transform.js';
 
 // cache-buster: one label per build, so a reload re-uses the cached 117 MB
 // GLB instead of fetching it again (v115 stamped the clock on every load)
-const BUILD = 'v240';
+const BUILD = 'v241';
 // V239: the world file is versioned by its own content, not by BUILD - a
 // viewer-only deploy must not make every visitor download 58 MB again, and
 // the door's cache is keyed by this exact URL. scripts/stamp_world.mjs
@@ -1823,6 +1823,27 @@ renderer.domElement.addEventListener('webglcontextrestored', () => {
 const draco = new DRACOLoader().setDecoderPath('./vendor/draco/');
 // V216: the shipped GLB is meshopt-compressed with quantized normals/uv/colour
 // (scripts/optimize_glb.sh); the Draco loader stays for an unoptimised export
+// V241 - THE LOAD NEVER BLOCKS THE PAGE. The door's ring (and the parent
+// page's timers - a same-origin iframe shares the main thread) stalled for
+// 3-4 s at 82 %: meshopt decoded 60 MB of streams on the main thread and
+// the meadow expansion ran 425 k blades in one synchronous loop. Meshopt
+// now decodes on a worker pool (the loader's async path) and the expansion
+// yields every 65 k blades and every four chunks, reporting its fraction.
+if (!Q.has('nomw')) MeshoptDecoder.useWorkers(Math.min(4, Math.max(2, (navigator.hardwareConcurrency || 4) - 1)));   // ?nomw=1: decode on the main thread (A/B)
+// a macrotask boundary (MessageChannel: no 4 ms clamp, no forced render -
+// scheduler.yield() waits for a frame and cost 60 ms a call here); the
+// loops below take it every ~80 ms of work, enough for a ring at 8 Hz
+const yieldCh = new MessageChannel(); let yieldRes = null; yieldCh.port1.onmessage = () => { const r = yieldRes; yieldRes = null; if (r) r(); };
+const yieldNow = () => new Promise((r) => { yieldRes = r; yieldCh.port2.postMessage(0); });
+let lastYield = 0;
+const maybeYield = async (progress) => { const now = performance.now(); if (now - lastYield < 80) return; lastYield = now; if (progress) tellParent(progress); await yieldNow(); };
+const T_LOAD = { t0: performance.now() };
+if (DEV) {   // where the parse goes: first call / last resolve of the two decoders and of the image decode
+  const wrap = (obj, key, tag) => { const orig = obj[key]; if (!orig) return; obj[key] = function (...a) { const t = performance.now(); if (!T_LOAD[tag + 'First']) T_LOAD[tag + 'First'] = t; T_LOAD[tag + 'N'] = (T_LOAD[tag + 'N'] || 0) + 1; const r = orig.apply(this, a); return r && r.then ? r.then((v) => { T_LOAD[tag + 'Last'] = performance.now(); return v; }) : r; }; };
+  wrap(MeshoptDecoder, 'decodeGltfBufferAsync', 'meshopt'); wrap(window, 'createImageBitmap', 'bitmap'); wrap(draco, 'decodeGeometry', 'draco');
+  const od = draco.decodeGeometry.bind(draco); T_LOAD.dracoCalls = [];   // per mesh: compressed bytes, decoded vertices, wall ms
+  draco.decodeGeometry = function (buffer, cfg) { const t = performance.now(); return od(buffer, cfg).then((g) => { T_LOAD.dracoCalls.push({ kb: Math.round(buffer.byteLength / 1024), verts: g.attributes.position ? g.attributes.position.count : 0, attrs: Object.keys(g.attributes).length, ms: Math.round(performance.now() - t) }); return g; }); };
+}
 const loader = new GLTFLoader().setDRACOLoader(draco).setMeshoptDecoder(MeshoptDecoder);
 // V240 - MEMORY PASSES (see MEMORY_TIER). three keeps every attribute's
 // typed array after the upload, for re-uploads and CPU reads; after load
@@ -1919,18 +1940,43 @@ if (EMBED) {
     tellParent({ type: 'hello', glb: GLB_ABS, build: BUILD });
   });
 }
-let glbSrc = GLB_URL;
-if (WORLD_BLOB) { glbSrc = URL.createObjectURL(WORLD_BLOB); console.info('island_world.glb: handed over by the door'); }
-else try {
-  if (window.caches) {
-    const hit = await caches.match(GLB_ABS);
-    if (hit) { glbSrc = URL.createObjectURL(await hit.blob()); console.info('island_world.glb: from the door\'s cache'); }
-  }
-} catch (e) { console.warn('cache lookup failed', e); }
+// V241: the bytes come from the door's Blob, the door's cache, or a fetch
+// with a byte count (the standalone viewer shows the same percentage), and
+// go to loader.parse as one ArrayBuffer - no object URL round trip.
+async function worldBytes(onProgress) {
+  if (WORLD_BLOB) { console.info('island_world.glb: handed over by the door'); return WORLD_BLOB.arrayBuffer(); }
+  try {
+    if (window.caches) { const hit = await caches.match(GLB_ABS); if (hit) { console.info('island_world.glb: from the door\'s cache'); return hit.arrayBuffer(); } }
+  } catch (e) { console.warn('cache lookup failed', e); }
+  const res = await fetch(GLB_URL);
+  if (!res.ok) throw new Error('island_world.glb ' + res.status);
+  const total = +res.headers.get('content-length') || 0;
+  if (!res.body) return res.arrayBuffer();
+  const reader = res.body.getReader(), chunks = []; let got = 0;
+  for (;;) { const { done, value } = await reader.read(); if (done) break; chunks.push(value); got += value.length; if (total) onProgress(got, total); }
+  const out = new Uint8Array(got); let off = 0; for (const c of chunks) { out.set(c, off); off += c.length; }
+  return out.buffer;
+}
+let worldBuf;
+try {
+  worldBuf = await worldBytes((loaded, total) => {
+    document.getElementById('loading').textContent = `pouring the watercolours… ${Math.round(100 * loaded / total)}%`;
+    tellParent({ type: 'progress', loaded, total });
+  });
+} catch (err) {
+  console.error('island_world.glb failed to load', err);
+  failPanel('The island could not load.');
+  tellParent({ type: 'error', message: 'The island could not load.' });
+}
 tellParent({ type: 'stage', stage: 'decoding' });
-loader.load(glbSrc, (gltf) => {
+T_LOAD.fetched = performance.now();
+if (worldBuf) loader.parse(worldBuf, './', async (gltf) => {
+  T_LOAD.parsed = performance.now();
   applyTerrainProfile(gltf.scene,THREE,TERRAIN_PROFILE);
-  gltf.scene.traverse((o) => {
+  // every mesh in traversal order, visited one at a time so the meadow's
+  // expansion can yield (three's traverse is synchronous; the list is taken
+  // first, so the chunk meshes splitBladeChunks adds are not revisited)
+  const visit = async (o) => {
     if (!o.isMesh) return;
     // V227 (Eric: 'move the bench closer to the tree, it's too far'): the
     // export has it 8.8 m from the trunk; Oga's sits 2 m to its left. Moved
@@ -2449,6 +2495,7 @@ loader.load(glbSrc, (gltf) => {
       let v = 0, k = 0;
       const vstart = new Uint32Array(nb + 1), bph = new Uint16Array(nb);
       for (let b = 0; b < nb; b++) {
+        if ((b & 0x3fff) === 0 && b) await maybeYield({ type: 'stage', stage: 'expanding', frac: 0.6 * b / nb });
         rv.fromBufferAttribute(T.root, b).applyMatrix4(TM);
         const c = T.cnt.getX(b), rx = rv.x, ry = rv.y, rz = rv.z;
         // (the table's streams are stride-padded by the compressor, so three
@@ -2468,7 +2515,9 @@ loader.load(glbSrc, (gltf) => {
       // the file (by 4 m cell) is untouched; only the index order changes.
       const tex = tg.userData || {};
       const chunkDefs = (tex.bladeChunks && tex.bladeChunks.length) ? tex.bladeChunks : [{ bladeStart: 0, bladeCount: nb }];
-      const chunks = chunkDefs.map(ch => {
+      const chunks = [];
+      for (let ci = 0; ci < chunkDefs.length; ci++) {
+        const ch = chunkDefs[ci];
         const n = ch.bladeCount, keys = new Float64Array(n);
         for (let i = 0; i < n; i++) keys[i] = bph[ch.bladeStart + i] * 1048576 + i;   // (phase << 20) | local id: one numeric sort
         keys.sort();
@@ -2480,8 +2529,9 @@ loader.load(glbSrc, (gltf) => {
           lodR1[i] = ph === 65535 ? 0 : Math.fround(ph / 65535);   // fract() of the normalised ushort
           lodEnd[i] = k - start;
         }
-        return { start, count: k - start, min: ch.min, max: ch.max, lodR1, lodEnd };
-      });
+        chunks.push({ start, count: k - start, min: ch.min, max: ch.max, lodR1, lodEnd });
+        await maybeYield({ type: 'stage', stage: 'expanding', frac: 0.6 + 0.4 * (ci + 1) / chunkDefs.length });
+      }
       if (k !== ntri * 3) console.warn('meadow repack: index count mismatch', k, ntri * 3);
       g.setAttribute('_root3', new THREE.BufferAttribute(root3, 3));
       // the shader reads the padded height stream as _height4 (three binds
@@ -2493,6 +2543,7 @@ loader.load(glbSrc, (gltf) => {
       g.setIndex(new THREE.BufferAttribute(index, 1));
       g.userData.bladeChunks = chunks; g.userData.bladeRestBaked = true;
       table.removeFromParent(); tg.dispose();           // V240: its streams are expanded; nothing reads it again
+      T_LOAD.meadow = performance.now();
       console.info(`meadow repack: ${nb} blades, ${nv} verts, ${ntri} tris, ${patterns.length} patterns, ${chunks.length} chunks expanded in ${(performance.now() - t0).toFixed(0)} ms`);
       o.updateWorldMatrix(true, false);
       const sc = new THREE.Vector3(); o.matrixWorld.decompose(new THREE.Vector3(), new THREE.Quaternion(), sc);
@@ -2758,9 +2809,13 @@ loader.load(glbSrc, (gltf) => {
                                       camera.position.z - o.position.z);
       clouds.push(o);
     }
-  });
+  };
+  const meshList = []; gltf.scene.traverse((o) => { if (o.isMesh) meshList.push(o); });
+  for (const o of meshList) { lastYield = performance.now(); await visit(o); }
+  T_LOAD.visited = performance.now();
   scene.add(gltf.scene);
   markBareTwigs(gltf.scene);
+  T_LOAD.twigs = performance.now();
   // V221: the step slab (WEB_HM_home_garden_27, 396 triangles) spans kit-local
   // x 1.379..3.079, plan y -1.49..-0.704 (GLB local z 0.704..1.49); its
   // footprint plus a 6 cm margin, in world, for the blade cull
@@ -2800,6 +2855,10 @@ loader.load(glbSrc, (gltf) => {
     }
     releaseImages(scene);
     setTimeout(() => releaseImages(scene), 15000);   // whatever another eye has uploaded since
+    T_LOAD.ready = performance.now();
+    const span = (a, b) => Math.round(T_LOAD[b] - T_LOAD[a]);
+    console.info(`load: fetch ${span('t0', 'fetched')} ms, parse ${span('fetched', 'parsed')} ms, build ${span('parsed', 'visited')} ms, finish ${span('visited', 'ready')} ms (warm-up included)`);
+    window.T_LOAD = T_LOAD;
     const el = document.getElementById('loading');
     el.style.opacity = 0;
     setTimeout(() => el.remove(), 700);
@@ -2807,14 +2866,8 @@ loader.load(glbSrc, (gltf) => {
     TIER.readyAt = performance.now();
     if (Q.get('tier') === 'phone') for (const st of TIER.ladder) tierApply(st);
   })();
-}, (ev) => {
-  if (ev.total) {
-    document.getElementById('loading').textContent =
-      `pouring the watercolours… ${Math.round(100 * ev.loaded / ev.total)}%`;
-    tellParent({ type: 'progress', loaded: ev.loaded, total: ev.total });
-  }
 }, (err) => {
-  console.error('island_world.glb failed to load', err);
+  console.error('island_world.glb failed to parse', err);
   failPanel('The island could not load.');
   tellParent({ type: 'error', message: 'The island could not load.' });
 });
