@@ -1,0 +1,27 @@
+{
+ "x0": 21.507,
+ "x1": 37.507000000000005,
+ "y0": 3.114,
+ "y1": 21.114,
+ "trunk_base_world": [
+  29.507,
+  1.114,
+  -3.097
+ ],
+ "painted_crown_extent_m": {
+  "dx": [
+   -3.4000000000000004,
+   6.9
+  ],
+  "dy": [
+   4.3,
+   15.2
+  ]
+ },
+ "reference_trunk_base_px": [
+  3013.0,
+  1060.0
+ ],
+ "px_per_m": 30.624,
+ "note": "V223: keep-probability of a leaf by its drawn (x, y) in the world; the painting crown relative to its own trunk base, placed on ours (scripts/crown_mask.py)"
+}

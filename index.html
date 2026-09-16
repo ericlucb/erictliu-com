@@ -115,6 +115,26 @@
        can be without running off screen. */
     #kPanelB { top:auto !important; bottom:calc(100% + 9px) !important; width:min(720px, calc((var(--mr) + var(--pw) * 0.4375) * 2 - 16px)) !important; max-height:calc(var(--vph) * 0.62) !important; }
   }
+  /* The door to Isola Quieta (ENTER). Two leaves in the page's ink swing
+     open on the world once it has loaded behind them. */
+  #kDoor { position:fixed; inset:0; z-index:40; background:var(--bg, #fbfbfa); perspective:1400px; overflow:hidden; }
+  #kDoor iframe { position:absolute; inset:0; width:100%; height:100%; border:0; background:#5d5f7e; }
+  #kDoor .kLeaf { position:absolute; top:0; bottom:0; width:50.2%; background:var(--ink, #141414); transition:transform 1.7s cubic-bezier(.65,0,.25,1); backface-visibility:hidden; will-change:transform; }
+  #kDoor .kLeafL { left:0; transform-origin:left center; }
+  #kDoor .kLeafR { right:0; transform-origin:right center; }
+  #kDoor .kLeafL::after, #kDoor .kLeafR::after { content:""; position:absolute; top:50%; width:9px; height:9px; border-radius:50%; background:var(--bg, #fbfbfa); opacity:.55; transform:translateY(-50%); }
+  #kDoor .kLeafL::after { right:min(3vw, 36px); }
+  #kDoor .kLeafR::after { left:min(3vw, 36px); }
+  #kDoor.open .kLeafL { transform:rotateY(-108deg); }
+  #kDoor.open .kLeafR { transform:rotateY(108deg); }
+  #kDoorMsg { position:absolute; left:50%; top:50%; transform:translate(-50%, -50%); z-index:2; display:grid; gap:14px; justify-items:center; width:min(320px, 70vw); color:var(--bg, #fbfbfa); font:clamp(12px, min(1.1vw, 2vh), 16px)/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing:.22em; text-align:center; pointer-events:none; transition:opacity .5s; }
+  #kDoor.open #kDoorMsg { opacity:0; }
+  #kDoorBar { display:block; width:100%; height:2px; background:color-mix(in srgb, var(--bg, #fbfbfa) 22%, transparent); overflow:hidden; }
+  #kDoorBar i { display:block; height:100%; width:0; background:var(--bg, #fbfbfa); transition:width .25s linear; }
+  #kLeave { position:absolute; left:min(3.4vw, 46px); top:min(3.4vw, 46px); z-index:3; appearance:none; background:rgba(20,20,20,.28); border:1px solid rgba(251,251,250,.45); color:#fbfbfa; font:clamp(11px, min(1vw, 1.9vh), 15px)/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing:.19em; padding:8px 12px; border-radius:999px; cursor:pointer; opacity:0; transition:opacity .6s .9s, background .16s; backdrop-filter:blur(6px); }
+  #kDoor.open #kLeave { opacity:1; }
+  #kLeave:hover { background:rgba(20,20,20,.5); }
+  @media (prefers-reduced-motion: reduce) { #kDoor .kLeaf { transition-duration:.4s; } }
 </style>
 </helmet>
 <div id="kStage" style="--pw:min(60vw, 114vh, (100vh - 230px) * 1.33); --pk:1; --mr:calc(min(9vw, 128px) + clamp(0px, (100vw - 1100px) * 0.34, 140px)); position:fixed; inset:0; background:#fbfbfa; display:grid; place-items:center; overflow:hidden; touch-action:none; cursor:default;">
@@ -402,6 +422,75 @@ class Component extends DCLogic {
 
   // DRAW mode: a transparent drawesome canvas over the whole page. The bundle
   // is React + drawesome (~235KB), so it loads on first use, not with the page.
+  // ENTER: a door opens on Isola Quieta (the world in ./isola/, a copy of
+  // github.com/ericlucb/isola-quieta's web/). The viewer loads in an iframe
+  // behind two closed leaves; this page downloads the 75 MB world file with
+  // a real progress bar, parks it in the Cache API under the exact URL the
+  // viewer will ask for, and tells the viewer to go; when the viewer reports
+  // ready, the leaves swing open and the portrait's loop pauses. LEAVE (or
+  // Esc from the page) closes it and resumes the page.
+  openDoor() {
+    if (this.door) return;
+    const ink = (this.theme && this.theme.ink) || '#141414', bg = (this.theme && this.theme.bg) || '#fbfbfa';
+    const d = document.createElement('div'); d.id = 'kDoor';
+    d.style.setProperty('--ink', ink); d.style.setProperty('--bg', bg);
+    d.innerHTML = '<iframe id="kWorld" title="Isola Quieta" allow="fullscreen"></iframe>'
+      + '<div class="kLeaf kLeafL"></div><div class="kLeaf kLeafR"></div>'
+      + '<div id="kDoorMsg"><span id="kDoorText">OPENING THE DOOR</span><span id="kDoorBar"><i></i></span></div>'
+      + '<button id="kLeave" type="button">LEAVE</button>';
+    document.body.appendChild(d);
+    this.door = d;
+    const text = d.querySelector('#kDoorText'), bar = d.querySelector('#kDoorBar i'), frame = d.querySelector('#kWorld');
+    const setBar = (f) => { bar.style.width = Math.round(Math.max(0, Math.min(1, f)) * 100) + '%'; };
+    const say = (m) => { text.textContent = m; };
+    let opened = false, heard = false;
+    const open = () => {
+      if (opened) return; opened = true;
+      setBar(1); say('');
+      d.classList.add('open');
+      cancelAnimationFrame(this.raf);            // the portrait rests while the world runs
+      if (this.dance) this.toggleDance();
+      setTimeout(() => { try { frame.contentWindow.focus(); } catch (e) {} }, 1700);
+    };
+    // the world file, downloaded here so the bar is honest, handed over via the Cache API
+    const fetchWorld = async (url) => {
+      say('POURING THE WATERCOLOURS');
+      const res = await fetch(url);
+      if (!res.ok || !res.body) throw new Error('world fetch ' + res.status);
+      const total = +res.headers.get('content-length') || 0;
+      const reader = res.body.getReader(), chunks = []; let got = 0;
+      for (;;) { const { done, value } = await reader.read(); if (done) break; chunks.push(value); got += value.length; if (total) setBar(got / total); }
+      const blob = new Blob(chunks, { type: 'model/gltf-binary' });
+      const c = await caches.open('isola-world');
+      await c.put(url, new Response(blob, { headers: { 'Content-Type': 'model/gltf-binary', 'Content-Length': String(blob.size) } }));
+    };
+    this.onDoorMsg = async (ev) => {
+      if (ev.origin !== location.origin || !ev.data || ev.data.isola !== 'v1' || ev.source !== frame.contentWindow) return;
+      const m = ev.data;
+      if (m.type === 'hello') {
+        heard = true;
+        try { if (window.caches) await fetchWorld(m.glb); } catch (e) { console.warn('door: the viewer will download the world itself', e); }
+        frame.contentWindow.postMessage({ isola: 'go' }, location.origin);
+        say('SETTING THE ISLAND');
+      } else if (m.type === 'progress') { if (m.total) setBar(m.loaded / m.total); say('POURING THE WATERCOLOURS'); }
+      else if (m.type === 'ready') open();
+      else if (m.type === 'error') say((m.message || 'THE ISLAND COULD NOT LOAD').toUpperCase());
+    };
+    addEventListener('message', this.onDoorMsg);
+    this.onDoorKey = (ev) => { if (ev.key === 'Escape') this.closeDoor(); };
+    addEventListener('keydown', this.onDoorKey);
+    frame.src = './isola/?embed=1';
+    setTimeout(() => { if (!heard && !opened) say('STILL KNOCKING'); }, 6000);
+  }
+
+  closeDoor() {
+    if (!this.door) return;
+    removeEventListener('message', this.onDoorMsg); removeEventListener('keydown', this.onDoorKey);
+    this.door.remove(); this.door = null;
+    this._t = performance.now() - 16.7;
+    this.raf = requestAnimationFrame(this.loop);
+  }
+
   openDraw() {
     if (window.__drawesome) { window.__drawesome.open(); return; }
     if (this._drawLoading) return;
@@ -623,6 +712,8 @@ class Component extends DCLogic {
       });
     };
     this.onClick = (ev) => {
+      if (ev.target && ev.target.closest && ev.target.closest('#kEnter')) { ev.preventDefault(); this.openDoor(); return; }
+      if (ev.target && ev.target.closest && ev.target.closest('#kLeave')) { this.closeDoor(); return; }
       const t = ev.target && ev.target.closest ? ev.target.closest('button') : null;
       const inPanel = ev.target && ev.target.closest ? ev.target.closest('#kPanel') : null;
       const body = document.getElementById('kPanelB');
@@ -671,7 +762,7 @@ class Component extends DCLogic {
     addEventListener('input', this.onInput);
 
     const en = document.getElementById('kEnter');
-    if (en) en.textContent = WORDS[Math.floor(Math.random() * WORDS.length)];
+    if (en) en.textContent = 'ENTER';   // the door to the island (openDoor); WORDS was the old random tease
     this.applyTheme();
     this.syncPanel();
     this._t = performance.now();

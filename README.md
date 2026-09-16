@@ -2,6 +2,7 @@
 
 Static personal site. No build step — `index.html` and `support.js` are served
 as-is. (`draw.js`/`draw.css` are a prebuilt vendored bundle; see Draw mode.)
+`isola/` is the island world behind the ENTER door; see The door.
 
 ## Draw mode
 
@@ -77,3 +78,31 @@ proxy on stops GitHub from renewing its Let's Encrypt certificate.
 
 `CNAME` in this repo is what binds the domain to the site. Deleting it
 unbinds the domain, so leave it in place.
+
+## The door (ENTER → Isola Quieta)
+
+`ENTER` (right edge) opens a door onto Isola Quieta, Kazuo Oga's island
+cottage rebuilt as a walkable three.js world. The world lives in `isola/`, a
+verbatim copy of the `web/` folder of
+[ericlucb/isola-quieta](https://github.com/ericlucb/isola-quieta) (private).
+To update it after the viewer changes:
+
+```bash
+rsync -a --delete --exclude README.md --exclude .DS_Store ../isola-quieta/web/ isola/
+```
+
+Nothing else needs bumping — the viewer cache-busts its own files with its
+`BUILD` constant. The world file `isola/island_world.glb` is ~75 MB; GitHub
+warns above 50 MB but Pages serves files up to 100 MB.
+
+How the door works (`openDoor()` in `index.html`): a full-screen overlay with
+two leaves in the page's ink colour appears, and the viewer loads in an iframe
+behind them at `isola/?embed=1`. The viewer posts `{isola:'v1', type:'hello',
+glb}` with the exact URL of its world file; the page downloads that file with
+a real progress bar, stores it in the Cache API (`isola-world`) under that
+URL, and answers `{isola:'go'}`; the viewer then finds it in the cache and
+loads without a second download, reporting `progress` and finally `ready`,
+at which point the leaves swing open, the portrait's animation loop pauses
+and the iframe takes focus. `LEAVE` (top left) or Esc closes the door and
+resumes the page. If the page never answers, the viewer loads the world
+itself after 2.5 s, so `isola/` also works on its own.

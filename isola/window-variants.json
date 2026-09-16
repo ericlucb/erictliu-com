@@ -1,0 +1,246 @@
+{
+  "materials": {
+    "WEB_HM_home_window_4": {
+      "reflection": 0.94,
+      "blur": 1.0
+    },
+    "WEB_HM_home_window_18": {
+      "reflection": 1.02,
+      "blur": 0.92
+    },
+    "WEB_HM_home_window_19": {
+      "reflection": 0.52,
+      "blur": 1.25,
+      "interior": 0
+    },
+    "WEB_HM_home_window_20": {
+      "reflection": 1.05,
+      "blur": 0.8,
+      "interior": 0,
+      "frontDaylight": 1,
+      "frontGlazing": 1,
+      "sideCurtains": 0
+    },
+    "WEB_HM_home_window_21": {
+      "reflection": 1.05,
+      "blur": 0.8,
+      "interior": 0,
+      "frontDaylight": 1,
+      "frontGlazing": 1,
+      "sideCurtains": 0
+    },
+    "WEB_HM_home_window_22": {
+      "reflection": 1.05,
+      "blur": 0.8,
+      "interior": 0,
+      "roomVariation": 0.045,
+      "blindOpening": 0,
+      "frontDaylight": 1,
+      "frontGlazing": 1,
+      "sideCurtains": 0
+    },
+    "WEB_HM_home_window_23": {
+      "reflection": 1.05,
+      "blur": 0.8,
+      "interior": 0,
+      "roomVariation": 0.045,
+      "blindOpening": 0,
+      "frontDaylight": 1,
+      "frontGlazing": 1,
+      "sideCurtains": 0
+    },
+    "WEB_HM_home_window_24": {
+      "reflection": 1.05,
+      "blur": 1.0,
+      "frontGlazing": 1,
+      "frontDaylight": 0,
+      "interior": 0,
+      "blindOpening": 0,
+      "sideCurtains": 0,
+      "roomVariation": 0,
+      "lift": 0.6
+    },
+    "WEB_HM_home_window_25": {
+      "reflection": 0.84,
+      "blur": 1.45
+    },
+    "WEB_HM_home_window_32": {
+      "reflection": 1.05,
+      "blur": 0.8,
+      "interior": 0,
+      "roomVariation": 0.045,
+      "blindOpening": 0,
+      "frontDaylight": 1,
+      "frontGlazing": 1,
+      "sideCurtains": 0
+    },
+    "WEB_HM_home_window_33": {
+      "reflection": 1.05,
+      "blur": 0.8,
+      "interior": 0,
+      "roomVariation": 0.045,
+      "blindOpening": 0,
+      "frontDaylight": 1,
+      "frontGlazing": 1,
+      "sideCurtains": 0
+    },
+    "WEB_HM_home_window_34": {
+      "reflection": 1.05,
+      "blur": 0.8,
+      "interior": 0,
+      "roomVariation": 0.045,
+      "blindOpening": 0,
+      "frontDaylight": 1,
+      "frontGlazing": 1,
+      "sideCurtains": 0
+    },
+    "WEB_HM_home_window_35": {
+      "reflection": 1.05,
+      "blur": 0.8,
+      "interior": 0.94,
+      "roomVariation": -0.025,
+      "blindOpening": 0,
+      "frontDaylight": 1,
+      "frontGlazing": 1,
+      "sideCurtains": 1
+    },
+    "WEB_HM_home_window_36": {
+      "reflection": 1.05,
+      "blur": 0.8,
+      "interior": 0.94,
+      "roomVariation": 0.045,
+      "blindOpening": 0,
+      "frontDaylight": 1,
+      "frontGlazing": 1,
+      "sideCurtains": 1
+    }
+  },
+  "views": {
+    "original": {
+      "label": "Front upper left \u2014 closed curtains",
+      "eye": [
+        1.3976149559020996,
+        5.089506149291992,
+        2.7602779865264893
+      ],
+      "target": [
+        -0.7384145855903625,
+        5.089506149291992,
+        0.9640572667121887
+      ],
+      "fov": 50
+    },
+    "gathered": {
+      "label": "Front upper middle \u2014 closed curtains",
+      "eye": [
+        4.105578891932964,
+        5.188506126403809,
+        -0.45997825264930725
+      ],
+      "target": [
+        1.969549410045147,
+        5.188506126403809,
+        -2.256199389696121
+      ],
+      "fov": 50
+    },
+    "closed": {
+      "label": "Front upper right \u2014 closed curtains",
+      "eye": [
+        6.437035083770752,
+        5.152506351470947,
+        -3.2324986457824707
+      ],
+      "target": [
+        4.3010053634643555,
+        5.152506351470947,
+        -5.028719902038574
+      ],
+      "fov": 50
+    },
+    "cafe": {
+      "label": "Front lower left \u2014 parted curtains",
+      "eye": [
+        1.4343006610870361,
+        3.1015024185180664,
+        2.7166526317596436
+      ],
+      "target": [
+        -0.7017291188240051,
+        3.1015024185180664,
+        0.9204317927360535
+      ],
+      "fov": 50
+    },
+    "swept": {
+      "label": "Front lower right \u2014 parted curtains",
+      "eye": [
+        6.428346157073975,
+        3.058502435684204,
+        -3.2221665382385254
+      ],
+      "target": [
+        4.292316436767578,
+        3.058502435684204,
+        -5.018387317657471
+      ],
+      "fov": 50
+    },
+    "roller": {
+      "label": "Rear upper left \u2014 roller",
+      "eye": [
+        -8.710698127746582,
+        5.148006439208984,
+        -7.430671691894531
+      ],
+      "target": [
+        -6.3545379638671875,
+        5.148006439208984,
+        -5.449339389801025
+      ],
+      "fov": 50
+    },
+    "roman": {
+      "label": "Rear upper right \u2014 roman",
+      "eye": [
+        -5.94320011138916,
+        5.148006439208984,
+        -10.721724510192871
+      ],
+      "target": [
+        -3.587040424346924,
+        5.148006439208984,
+        -8.740392684936523
+      ],
+      "fov": 50
+    },
+    "privacy": {
+      "label": "Small side window \u2014 privacy",
+      "eye": [
+        -5.303554058074951,
+        5.439507007598877,
+        3.4764301776885986
+      ],
+      "target": [
+        -4.0807085037231445,
+        5.439507007598877,
+        2.022246837615967
+      ],
+      "fov": 50
+    },
+    "attic": {
+      "label": "Attic window \u2014 centered",
+      "eye": [
+        4.003900057220459,
+        7.463011093139649,
+        -11.229307524108886
+      ],
+      "target": [
+        2.372250324630737,
+        7.463011093139649,
+        -9.288982740783691
+      ],
+      "fov": 50
+    }
+  }
+}
