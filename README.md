@@ -85,15 +85,16 @@ unbinds the domain, so leave it in place.
 cottage rebuilt as a walkable three.js world. The world lives in `isola/`, a
 verbatim copy of the `web/` folder of
 [ericlucb/isola-quieta](https://github.com/ericlucb/isola-quieta) (private).
-To update it after the viewer changes:
-
-```bash
-rsync -a --delete --exclude README.md --exclude .DS_Store ../isola-quieta/web/ isola/
-```
+To update it after the viewer changes, run `npm run site` in isola-quieta: it
+builds the viewer, rsyncs `web/` here (README and .DS_Store excluded) and
+stamps the world's tag and raw size into this page's door (`static WORLD_TAG`
+/ `WORLD_BYTES` in the `Component` class), then commit `isola/` and
+`index.html` together.
 
 Nothing else needs bumping — the viewer cache-busts its own files with its
-`BUILD` constant. The world file `isola/island_world.glb` is ~58 MB; GitHub
-warns above 50 MB but Pages serves files up to 100 MB.
+`BUILD` constant, and the world by its own content hash. The world file
+`isola/island_world.glb` is ~69 MB (54 MB on the wire, Pages gzips it);
+GitHub warns above 50 MB but Pages serves files up to 100 MB.
 
 **Hosting the world off the repo.** Every world update adds ~58 MB to this
 repo's history. To move the file to Cloudflare R2: create a bucket, upload
@@ -108,16 +109,22 @@ and `erictliu.com` hosts. Cache-busting is then by file name (put the
 viewer's build tag in the object key).
 
 How the door works (`openDoor()` in `index.html`): nothing is fetched until
-the click. Then the ENTER link becomes a small door with a ring around it,
-the viewer starts in an iframe at `isola/?embed=1` behind the page, and the
-viewer posts `{isola:'v1', type:'hello', glb}` with the exact URL of its world
-file. The page downloads that file itself so the ring is honest, stores it
-in the Cache API (`isola-world`) under that URL, and answers `{isola:'go'}`;
-the viewer finds it in the cache (no second download), decodes it while the
-ring spins full, and posts `ready`, at which point the little door swings
-open, the world fades in over the page, the portrait's animation loop pauses
-and the iframe takes focus. The open door is a history entry, so the
-browser's Back (or the phone's back gesture) closes it and restores ENTER;
-there is no LEAVE button and Esc is left to the world (it releases a held
-mouse). If the page never answers, the viewer loads the world itself after
+the click. Then the ENTER link becomes a small door with a ring around it
+and the page starts downloading the world file that instant, from the tag
+stamped in the page, while the viewer starts in an iframe at
+`isola/?embed=1` behind the page. The ring counts the world's bytes against
+its raw size (the host gzips it, so content-length is not the file). The
+viewer's first act is to post `{isola:'v1', type:'hello', glb, bytes}` with
+the exact URL it will ask for; the page answers `{isola:'ack'}` so the viewer
+waits, stores the file in the Cache API (`isola-world`) under that URL for
+the next visit, and hands the bytes over as a Blob with `{isola:'go'}`. (A
+hello naming a different URL - the stamp here behind the viewer - restarts
+the download from the viewer's URL.) The viewer decodes the file while the
+ring creeps through its stages, and posts `ready`, at which point the little
+door swings open, the world fades in over the page, the portrait's
+animation loop pauses and the iframe takes focus. The open door is a history
+entry, so the browser's Back (or the phone's back gesture) closes it,
+aborts a download still running, and restores ENTER; there is no LEAVE
+button and Esc is left to the world (it pauses the mouse look). If the page
+never acks, the viewer loads the world itself after
 2.5 s, so `isola/` also works on its own.

@@ -422,19 +422,27 @@ class Component extends DCLogic {
   // is React + drawesome (~235KB), so it loads on first use, not with the page.
   // ENTER: the door to Isola Quieta (the world in ./isola/, a copy of
   // github.com/ericlucb/isola-quieta's web/). Nothing is fetched until the
-  // click. Then the link turns into a small door with a ring around it; the
-  // page downloads the 75 MB world file so the ring is honest, parks it in
-  // the Cache API under the exact URL the viewer (an iframe, created now)
-  // will ask for, and tells the viewer to go. When the viewer reports ready
-  // the little door swings open and the world fades in over the page; the
-  // portrait's loop pauses. LEAVE (or Esc) closes it and restores ENTER.
-  // WORLD: leave empty and the world file is ./isola/island_world.glb (57 MB in
-  // this repo). To serve it from Cloudflare R2 instead, upload
-  // isola/island_world.glb to a bucket with a public domain and a CORS rule
-  // allowing GET from https://erictliu.com (the ring needs a readable body
-  // and Content-Length), then put its https URL here - the viewer only
-  // accepts *.r2.dev, *.r2.cloudflarestorage.com and erictliu.com hosts.
+  // click. Then the link turns into a small door with a ring around it and
+  // the page starts downloading the world file that instant (69 MB raw, 54
+  // MB on the wire), while the viewer (an iframe, created now) fetches its
+  // own files; the ring counts the world's bytes so it is honest. The viewer
+  // says hello with the URL it will ask for, the page parks the bytes in the
+  // Cache API under that URL and hands them over as a Blob with 'go'. When
+  // the viewer reports ready the little door swings open and the world fades
+  // in over the page; the portrait's loop pauses. Back closes it.
+  // WORLD_TAG / WORLD_BYTES: the world's content tag and raw size, stamped by
+  // isola-quieta's `npm run site` (scripts/site.mjs) - that is what lets the
+  // download start before the viewer has loaded. A stamp behind the viewer's
+  // world only costs a restart of the download from the viewer's URL.
+  // WORLD: leave empty and the world file is ./isola/island_world.glb. To
+  // serve it from Cloudflare R2 instead, upload isola/island_world.glb to a
+  // bucket with a public domain and a CORS rule allowing GET from
+  // https://erictliu.com (the ring needs a readable body and Content-Length),
+  // then put its https URL here - the viewer only accepts *.r2.dev,
+  // *.r2.cloudflarestorage.com and erictliu.com hosts.
   static WORLD = '';
+  static WORLD_TAG = '2c36cb00';
+  static WORLD_BYTES = 68978244;
   openDoor() {
     if (this.door) return;
     const en = document.getElementById('kEnter'); if (!en) return;
@@ -461,8 +469,33 @@ class Component extends DCLogic {
     const creepTo = (ceiling) => { target = Math.max(target, shown); const cap = ceiling; if (creep) clearInterval(creep);
       creep = setInterval(() => { if (shown >= cap - 0.0005) { clearInterval(creep); creep = null; return; } paint(shown + (cap - shown) * 0.08); }, 120); };
     paint(0.02);
+    // the world file, downloaded from the click so the ring moves at once,
+    // handed over as a Blob; on a gzip host (GitHub Pages) content-length is
+    // the compressed size, so the file's own raw size is the denominator
+    const K = this.constructor;
+    let worldUrl = K.WORLD || new URL('./isola/island_world.glb?v=' + K.WORLD_TAG, location.href).href;
+    let abort = new AbortController();
+    const fetchWorld = async (url, rawBytes, signal) => {
+      const res = await fetch(url, { signal });
+      if (!res.ok || !res.body) throw new Error('world fetch ' + res.status);
+      const encoded = !!res.headers.get('content-encoding');
+      const total = (encoded && rawBytes) ? rawBytes : (+res.headers.get('content-length') || rawBytes || 0);
+      const reader = res.body.getReader(), chunks = []; let got = 0;
+      for (;;) { const { done, value } = await reader.read(); if (done) break; chunks.push(value); got += value.length; if (total) setBar(0.02 + 0.78 * got / total); }
+      const blob = new Blob(chunks, { type: 'model/gltf-binary' });
+      chunks.length = 0;
+      try {   // for the next visit; a phone's quota or private mode may refuse, and the hand-off does not depend on it
+        const c = await caches.open('isola-world');
+        await c.put(url, new Response(blob, { headers: { 'Content-Type': 'model/gltf-binary', 'Content-Length': String(blob.size) } }));
+        for (const k of await c.keys()) if (k.url !== url) await c.delete(k);   // one world in the cache, not one per version
+      } catch (e) { console.warn('door: could not cache the world', e); }
+      return blob;
+    };
+    const startWorld = (url, bytes) => fetchWorld(url, bytes, abort.signal).catch((e) => { if (e.name !== 'AbortError') console.warn('door: the viewer will download the world itself', e); return null; });
+    let worldP = startWorld(worldUrl, K.WORLD_BYTES);
+    this.abortWorld = () => abort.abort();
     const d = document.createElement('div'); d.id = 'kDoor';
-    d.innerHTML = '<iframe id="kWorld" title="Isola Quieta" allow="fullscreen; pointer-lock"></iframe>';
+    d.innerHTML = '<iframe id="kWorld" title="Isola Quieta" allow="fullscreen"></iframe>';
     document.body.appendChild(d);
     this.door = d;
     const frame = d.querySelector('#kWorld');
@@ -485,32 +518,18 @@ class Component extends DCLogic {
       en.textContent = 'COULD NOT OPEN';
       setTimeout(() => this.closeDoor(), 2500);   // (pops the history entry, which closes)
     };
-    // the world file, downloaded here so the ring is honest, handed over via the Cache API
-    const fetchWorld = async (url, rawBytes) => {
-      const res = await fetch(url);
-      if (!res.ok || !res.body) throw new Error('world fetch ' + res.status);
-      // the reader yields decoded bytes; on a gzip host (GitHub Pages) content-length is the
-      // compressed size, so the viewer's own raw size (hello.bytes) is the honest denominator
-      const encoded = !!res.headers.get('content-encoding');
-      const total = (encoded && rawBytes) ? rawBytes : (+res.headers.get('content-length') || rawBytes || 0);
-      const reader = res.body.getReader(), chunks = []; let got = 0;
-      for (;;) { const { done, value } = await reader.read(); if (done) break; chunks.push(value); got += value.length; if (total) setBar(0.02 + 0.78 * got / total); }
-      const blob = new Blob(chunks, { type: 'model/gltf-binary' });
-      chunks.length = 0;
-      try {   // for the next visit; a phone's quota or private mode may refuse, and the hand-off below does not depend on it
-        const c = await caches.open('isola-world');
-        await c.put(url, new Response(blob, { headers: { 'Content-Type': 'model/gltf-binary', 'Content-Length': String(blob.size) } }));
-        for (const k of await c.keys()) if (k.url !== url) await c.delete(k);   // one world in the cache, not one per version
-      } catch (e) { console.warn('door: could not cache the world', e); }
-      return blob;
-    };
     this.onDoorMsg = async (ev) => {
       if (ev.origin !== location.origin || !ev.data || ev.data.isola !== 'v1' || ev.source !== frame.contentWindow) return;
       const m = ev.data;
       if (m.type === 'hello') {
         heard = true;
-        let world = null;
-        try { world = await fetchWorld(m.glb, m.bytes || 0); } catch (e) { console.warn('door: the viewer will download the world itself', e); }
+        frame.contentWindow.postMessage({ isola: 'ack' }, location.origin);   // 'wait for me': the viewer holds its own download
+        if (m.glb !== worldUrl) {   // this page's stamp is behind the viewer's world: its URL wins, from the start
+          console.warn('door: the viewer asks for ' + m.glb + ', not ' + worldUrl + ' (npm run site stamps this page)');
+          abort.abort(); abort = new AbortController(); worldUrl = m.glb; paint(0.02);
+          worldP = startWorld(worldUrl, m.bytes || 0);
+        }
+        const world = await worldP;
         frame.contentWindow.postMessage(world ? { isola: 'go', world } : { isola: 'go' }, location.origin);
         if (world) { setBar(0.80); creepTo(0.88); }   // decoding starts; the viewer's stages take it from here
       } else if (m.type === 'progress') { if (m.total) setBar(0.02 + 0.78 * m.loaded / m.total); }
@@ -524,7 +543,7 @@ class Component extends DCLogic {
     };
     addEventListener('message', this.onDoorMsg);
     // the browser's Back is the way out (no LEAVE button, no Esc - Esc is
-    // how the world releases a held mouse): the open door is a history entry
+    // the world's own key, it pauses the mouse look): the open door is a history entry
     history.pushState({ isola: 'door' }, '', location.href);
     this.onDoorPop = () => this.closeDoor(true);
     addEventListener('popstate', this.onDoorPop);
@@ -536,6 +555,7 @@ class Component extends DCLogic {
     if (!this.door) return;
     if (!fromHistory && history.state && history.state.isola === 'door') { history.back(); return; }   // -> popstate -> here
     removeEventListener('message', this.onDoorMsg); removeEventListener('popstate', this.onDoorPop);
+    if (this.abortWorld) { this.abortWorld(); this.abortWorld = null; }   // a download still running stops with the door
     this.door.remove(); this.door = null;
     const en = document.getElementById('kEnter');
     if (en) { en.classList.remove('kLoading', 'kOpen'); en.removeAttribute('aria-busy'); en.style.color = ''; en.textContent = 'ENTER'; }

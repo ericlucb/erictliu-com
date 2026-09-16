@@ -37,7 +37,7 @@ import { WORLD_TAG, WORLD_BYTES, resolveWorldUrl, worldBytes } from './world-fil
 
 // cache-buster: one label per build, so a reload re-uses the cached 117 MB
 // GLB instead of fetching it again (v115 stamped the clock on every load)
-const BUILD = 'v245';
+const BUILD = 'v246';
 // V242: the world's parse finishes in ~200 ms now (meshopt), sooner than
 // this module finishes evaluating - it suspends on later top-level awaits -
 // so the load callback must wait for the module's last line, or it reads
@@ -65,6 +65,13 @@ initBoat(boatWaterlinePromise);
 // a full-screen copy every frame, and this is a 3.4 M vertex scene.
 const Q = new URLSearchParams(location.search);
 const TOUCH = matchMedia('(hover: none) and (pointer: coarse)').matches;
+// V246: hello to the door before anything else here runs. The door started
+// downloading the world at the click (it carries the world's tag); this
+// names the URL the viewer will ask for and, with the door's 'ack', holds
+// the viewer's own download until the door's Blob arrives.
+const { WORLD_URL, GLB_URL, GLB_ABS } = resolveWorldUrl(Q, DEV);
+window.WORLD_URL = WORLD_URL;
+const DOOR = EMBED ? waitForDoor(GLB_ABS, BUILD, WORLD_BYTES) : null;
 // V240 - THE PHONE'S MEMORY (Eric: 'on mobile chrome iOS it loads but then
 // it just craps out'). iOS Chrome is WebKit, and WebKit kills a page that
 // crosses its memory ceiling with no error - and this world at a phone's
@@ -325,37 +332,45 @@ controls.maxPolarAngle = Math.PI * 0.495;
 let autorotate = false;
 
 const moveHint = document.getElementById('hud');
+let moveHintSeconds = 0, hintTimer = 0;
+function flashHint() {           // the hint shows again for a moment when the look is paused or resumed
+  moveHint.classList.remove('used'); clearTimeout(hintTimer);
+  hintTimer = setTimeout(() => { if (moveHintSeconds >= .65) moveHint.classList.add('used'); }, 4000);
+}
 // Quiet flight: level horizon, steady lens, responsive easing and WASD only.
 // Drag-to-look supplies direction; forward/backward follow the viewing ray.
 const FLY = { on: true, vel: new THREE.Vector3(), yaw: 0, pitch: 0, roll: 0,
               lookX: 0, lookY: 0, drag: false, lastX: 0, lastY: 0, fov0: heroFov(innerWidth / innerHeight) };
-// V239 - MOUSE LOOK. Three ways to look, one controller:
-//   hover - the default on a mouse: the view follows the cursor's place in
-//           the frame, +-70 deg of yaw and +-28 deg of pitch at the edges,
-//           a small dead zone at the centre, eased; no click needed.
-//   hold  - a click in the world asks for the Pointer Lock; the mouse then
-//           turns the view without bounds (the game way); Esc releases it.
-//   drag  - always there: press and move turns the base direction. On touch
-//           it is the only way (with the stick), and hover never runs.
-// The base direction (FLY.yaw/pitch) is what drag, hold and LOOKAT set; the
-// hover offset (HOVER.x/y) sits on top and is held still during a drag or
-// a hold, then re-based on release so the view never jumps. The pill at the
-// top (#lookchip) and the Esc key free the cursor. Off in the capture harness.
-const HOVER = { on: false, seen: false, locked: false, x: 0, y: 0, mx: 0.5, my: 0.5 };
-const HOVER_X = 70 * Math.PI / 180, HOVER_Y = 28 * Math.PI / 180, HOVER_DEAD = 0.06;
-function hoverTarget() {
-  const ease = (v) => { const a = Math.abs(v); if (a < HOVER_DEAD) return 0; const t = (a - HOVER_DEAD) / (1 - HOVER_DEAD); return Math.sign(v) * t * t * (3 - 2 * t); };
-  return [-ease((HOVER.mx - 0.5) * 2) * HOVER_X, -ease((HOVER.my - 0.5) * 2) * HOVER_Y];
-}
-function rebaseHover() {           // keep the view where it is, move the split between base and hover
-  if (!HOVER.on || !HOVER.seen || HOVER.locked) return;
-  const [tx, ty] = hoverTarget();
-  FLY.yaw += HOVER.x - tx; FLY.pitch += HOVER.y - ty; HOVER.x = tx; HOVER.y = ty;
+// V246 - MOUSE LOOK (Eric: 'less sensitive'; 'it just shows the mouse and
+// it isn't click to look around either'; before that, 'just follow the
+// mouse when you enter'). One way to look on a mouse: the view turns with
+// the mouse's motion, the cursor stays visible, nothing is clicked, dragged
+// or held. Crossing the whole frame turns about 75 deg; at the frame's left
+// or right edge the view keeps turning (a quadratic ramp over the outer
+// 10 %, 46 deg/s at the very edge), so a full turn needs no lock; the top
+// and bottom edges tilt, slower. The edge waits until the cursor has been
+// through the middle of the frame, so a cursor parked where ENTER was
+// cannot swing the view before the visitor touches the mouse - and looking
+// only starts once the world is in view (V239's hover tracked the cursor
+// through the load and opened onto the sea). Esc pauses it (the hint by
+// the WASD keys says so); Esc, the hint or a click in the world resumes;
+// neither changes the view. Off on touch (the drag and the stick) and in
+// the capture harness. FLY.yaw/pitch is the only direction; the mouse's
+// deltas go through FLY.lookX/Y and fly()'s smoothing, as the drag's do.
+const LOOK = { on: false, inside: false, armed: false, mx: 0.5, my: 0.5 };
+const LOOK_GAIN = 0.0009;                                   // rad per px (the old drag: 0.0016; 'moves way too much' was 0.0028)
+const LOOK_EDGE_X = 0.10, LOOK_EDGE_Y = 0.06;               // the edge zones, as fractions of the frame
+const LOOK_TURN_X = 0.8, LOOK_TURN_Y = 0.35;                // rad/s at the very edge
+function lookEdge(dt) {                                     // the edge turn, into the smoothed deltas
+  if (!LOOK.on || !LOOK.inside || !LOOK.armed) return;
+  const ramp = (v, zone) => { const a = Math.abs(v); if (a < 1 - zone) return 0; const t = Math.min(1, (a - (1 - zone)) / zone); return Math.sign(v) * t * t; };
+  FLY.lookX -= ramp((LOOK.mx - 0.5) * 2, LOOK_EDGE_X) * LOOK_TURN_X * dt;
+  FLY.lookY -= ramp((LOOK.my - 0.5) * 2, LOOK_EDGE_Y) * LOOK_TURN_Y * dt;
 }
 function flySyncFromCamera() {
   const d = new THREE.Vector3(); camera.getWorldDirection(d);
-  FLY.pitch = Math.asin(THREE.MathUtils.clamp(d.y, -1, 1)) - HOVER.y;   // the camera's direction is base + hover
-  FLY.yaw = Math.atan2(-d.x, -d.z) - HOVER.x;
+  FLY.pitch = Math.asin(THREE.MathUtils.clamp(d.y, -1, 1));
+  FLY.yaw = Math.atan2(-d.x, -d.z);
   FLY.roll = 0; FLY.vel.set(0, 0, 0); FLY.lookX = FLY.lookY = 0;
 }
 // A VERIFICATION HANDLE.  `window.CAM` has been exposed for a while, but moving
@@ -431,61 +446,52 @@ function enableTouch() {
   if (document.body.classList.contains('touch')) return;
   document.body.classList.add('touch');
   moveHint.setAttribute('aria-label', 'Drag to look around. Use the stick to move.');
-  if (HOVER.on) setLooking(false);
+  if (LOOK.on) setLooking(false);
 }
+// the drag: a finger's way to look (with the stick); a mouse never drags (V246)
 renderer.domElement.addEventListener('pointerdown', (e) => {
-  if (!FLY.on || e.button > 1 || HOVER.locked) return;
-  if (e.pointerType === 'touch') enableTouch();
+  if (!FLY.on || e.pointerType !== 'touch') return;
+  enableTouch();
   if (FLY.drag) return;                      // one finger looks; another is ignored
-  FLY.drag = true; FLY.dragId = e.pointerId; FLY.lastX = e.clientX; FLY.lastY = e.clientY; FLY.dragMoved = 0;
+  FLY.drag = true; FLY.dragId = e.pointerId; FLY.lastX = e.clientX; FLY.lastY = e.clientY;
   try { renderer.domElement.setPointerCapture(e.pointerId); } catch (_) {}
 });
 addEventListener('pointermove', (e) => {
   if (!FLY.on || !FLY.drag || e.pointerId !== FLY.dragId) return;
-  const sens = e.pointerType === 'touch' ? 0.0030 : 0.0016;   // mouse: was 0.0028 - 'moves way too much'; a thumb travels less
+  const sens = 0.0030;                       // a thumb travels less than a mouse
   FLY.lookX -= (e.clientX - FLY.lastX) * sens;
   FLY.lookY -= (e.clientY - FLY.lastY) * sens;
-  FLY.dragMoved += Math.abs(e.clientX - FLY.lastX) + Math.abs(e.clientY - FLY.lastY);
   FLY.lastX = e.clientX; FLY.lastY = e.clientY;
 });
-addEventListener('pointerup', (e) => { if (e.pointerId === FLY.dragId) { FLY.drag = false; rebaseHover(); } });
-addEventListener('pointercancel', (e) => { if (e.pointerId === FLY.dragId) { FLY.drag = false; rebaseHover(); } });
-// hover: where the mouse is in the frame; hold: the locked mouse's motion
+addEventListener('pointerup', (e) => { if (e.pointerId === FLY.dragId) FLY.drag = false; });
+addEventListener('pointercancel', (e) => { if (e.pointerId === FLY.dragId) FLY.drag = false; });
+// the mouse: its motion turns the view, its place in the frame drives the edge turn
 addEventListener('mousemove', (e) => {
   if (document.body.classList.contains('touch')) return;      // a tap's synthetic mouse events
-  if (HOVER.locked) { FLY.lookX -= e.movementX * 0.0016; FLY.lookY -= e.movementY * 0.0016; return; }
-  HOVER.mx = e.clientX / innerWidth; HOVER.my = e.clientY / innerHeight; HOVER.seen = true;
+  LOOK.mx = e.clientX / innerWidth; LOOK.my = e.clientY / innerHeight;
+  if (!LOOK.inside) { LOOK.inside = true; return; }          // the first event after entering the frame carries no honest delta
+  if (Math.abs(LOOK.mx - 0.5) * 2 < 1 - LOOK_EDGE_X && Math.abs(LOOK.my - 0.5) * 2 < 1 - LOOK_EDGE_Y) LOOK.armed = true;
+  if (!LOOK.on || !FLY.on) return;
+  FLY.lookX -= THREE.MathUtils.clamp(e.movementX, -200, 200) * LOOK_GAIN;   // (a clamp against a jump the OS reports on re-entry; a flick is under 200 px an event)
+  FLY.lookY -= THREE.MathUtils.clamp(e.movementY, -200, 200) * LOOK_GAIN;
 });
-// LOOKING or FREE. Looking: the view follows the cursor, a click holds the
-// mouse (pointer lock). Esc - the key, the chip, or the browser's own exit
-// from a held mouse - frees the cursor; the next click in the world looks
-// again. Nothing here changes the view direction: leaving looking bakes
-// the hover offset into the base, entering it starts from where you are.
+document.documentElement.addEventListener('mouseleave', () => { LOOK.inside = false; });
+// LOOKING or PAUSED. Esc (the key, or the hint by the WASD keys) toggles;
+// a click in the world resumes. Nothing here changes the view direction.
 function setLooking(on) {
-  if (!on && HOVER.locked) { try { document.exitPointerLock(); } catch (_) {} }
-  if (!on) { FLY.yaw += HOVER.x; FLY.pitch += HOVER.y; HOVER.x = HOVER.y = 0; }   // bake the offset in: no jump
-  HOVER.on = on;
+  LOOK.on = on;
+  FLY.lookX = FLY.lookY = 0;
   document.body.classList.toggle('free', !on);
-}
-function holdMouse() {
-  if (HOVER.locked || TOUCH) return;
-  try { const p = renderer.domElement.requestPointerLock({ unadjustedMovement: true }); if (p && p.catch) p.catch(() => {}); } catch (_) {}
+  flashHint();
 }
 renderer.domElement.addEventListener('click', () => {
-  if (!FLY.on || FLY.dragMoved > 4 || document.body.classList.contains('touch')) return;   // a drag is not a click
-  if (!HOVER.on) setLooking(true);
-  holdMouse();
+  if (!FLY.on || LOOK.on || document.body.classList.contains('touch')) return;
+  setLooking(true);
 });
-document.addEventListener('pointerlockchange', () => {
-  const was = HOVER.locked;
-  HOVER.locked = document.pointerLockElement === renderer.domElement;
-  document.body.classList.toggle('locked', HOVER.locked);
-  if (was && !HOVER.locked) setLooking(false);   // the browser's Esc: the cursor is free, so is the view
-});
-document.addEventListener('pointerlockerror', () => { HOVER.locked = false; document.body.classList.remove('locked'); });
-document.getElementById('lookchip').addEventListener('click', () => { if (HOVER.on) setLooking(false); else { setLooking(true); } });
-setLooking(!TOUCH && !Q.has('capture') && Q.get('look') !== 'drag');
-window.HOVER = HOVER; window.setLooking = setLooking;
+const lookHint = document.getElementById('lookhint');
+lookHint.addEventListener('click', () => { setLooking(!LOOK.on); lookHint.blur(); });
+document.body.classList.toggle('free', true);   // looking starts when the world is in view (the ready block)
+window.LOOK = LOOK; window.setLooking = setLooking;
 // the thumb stick: its own pointer, captured; magnitude past a 12 % dead
 // zone is the speed, direction is forward/right in the camera's frame
 const stickEl = document.getElementById('stick'), stickKnob = stickEl.querySelector('.knob');
@@ -516,16 +522,13 @@ stickEl.addEventListener('lostpointercapture', stickEnd);
 if (TOUCH) enableTouch();
 window.MOVE = MOVE;                          // the harness drives the stick's numbers directly
 function fly(dt) {
+  lookEdge(dt);
   const k = 1 - Math.exp(-dt * 14);                       // look smoothing
   const ax = FLY.lookX * k, ay = FLY.lookY * k;
   FLY.lookX -= ax; FLY.lookY -= ay;
   FLY.yaw += ax;
   FLY.pitch = THREE.MathUtils.clamp(FLY.pitch + ay, -1.25, 1.25);
-  if (HOVER.on && HOVER.seen && !FLY.drag && !HOVER.locked) {   // the hover offset eases toward the cursor
-    const [tx, ty] = hoverTarget(), kh = 1 - Math.exp(-dt * 6);
-    HOVER.x += (tx - HOVER.x) * kh; HOVER.y += (ty - HOVER.y) * kh;
-  }
-  const yaw = FLY.yaw + HOVER.x, pitch = THREE.MathUtils.clamp(FLY.pitch + HOVER.y, -1.25, 1.25);
+  const yaw = FLY.yaw, pitch = FLY.pitch;
   const cp = Math.cos(pitch);
   const fwd = _fwd.set(-Math.sin(yaw) * cp, Math.sin(pitch), -Math.cos(yaw) * cp);
   const rgt = _rgt.set(Math.cos(yaw), 0, -Math.sin(yaw));
@@ -1615,9 +1618,7 @@ if (DEV) {   // where the parse goes: first call / last resolve of the two decod
   wrap(MeshoptDecoder, 'decodeGltfBufferAsync', 'meshopt'); wrap(window, 'createImageBitmap', 'bitmap');
 }
 const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);   // V242: meshopt only, no Draco
-const { WORLD_URL, GLB_URL, GLB_ABS } = resolveWorldUrl(Q, DEV);
-window.WORLD_URL = WORLD_URL;
-let WORLD_BLOB = EMBED ? await waitForDoor(GLB_ABS, BUILD, WORLD_BYTES) : null;   // the door's bytes, if it answered
+let WORLD_BLOB = DOOR ? await DOOR : null;   // the door's bytes, if it answered (the hello went out at the top of this file)
 let worldBuf;
 try {
   worldBuf = await worldBytes({ url: GLB_URL, abs: GLB_ABS, blob: WORLD_BLOB }, (loaded, total) => {
@@ -2606,6 +2607,8 @@ if (worldBuf) loader.parse(worldBuf, './', async (gltf) => {
     el.style.opacity = 0;
     setTimeout(() => el.remove(), 700);
     tellParent({ type: 'ready' });
+    // the mouse look starts once the world is in view: the door's fade runs ~2 s after ready
+    if (!TOUCH && !Q.has('capture')) setTimeout(() => { if (!document.body.classList.contains('touch')) setLooking(true); }, EMBED ? 1800 : 0);
     TIER.readyAt = performance.now();
     if (Cloth.pending) setTimeout(() => { const o = Cloth.pending; Cloth.pending = null; const t = performance.now(); Cloth.init(o); console.info(`cloth rig built after ready in ${Math.round(performance.now() - t)} ms`); }, 400);
     if (Q.get('tier') === 'phone') for (const st of TIER.ladder) tierApply(st);
@@ -2616,14 +2619,13 @@ if (worldBuf) loader.parse(worldBuf, './', async (gltf) => {
   tellParent({ type: 'error', message: 'The island could not load.' });
 });
 
-let moveHintSeconds = 0;
 const movementKeys = new Set(['w', 'a', 's', 'd']);
 function isEditingControl(target) {
   return target instanceof Element && !!target.closest('input, select, textarea, [contenteditable="true"]');
 }
 addEventListener('keydown', (e) => {
   if (e.metaKey || e.ctrlKey || e.altKey || isEditingControl(e.target)) return;
-  if (e.key === 'Escape') { if (HOVER.on && !HOVER.locked) setLooking(false); return; }   // (a held mouse: the browser frees it first, pointerlockchange follows)
+  if (e.key === 'Escape') { if (!document.body.classList.contains('touch')) setLooking(!LOOK.on); return; }
   const key = e.key.toLowerCase();
   if (key === 'h') { restoreHero(); return; }          // the painting's exact pose (V207: the default is pulled back)
   if (!movementKeys.has(key)) return;
@@ -2646,10 +2648,9 @@ const KEYS = { w: false, a: false, s: false, d: false };
 function releaseMovement() {
   for (const k in KEYS) KEYS[k] = false;
   moveHint.querySelectorAll('.held').forEach(key => key.classList.remove('held'));
-  FLY.drag = false; FLY.lookX = FLY.lookY = 0; FLY.vel.set(0, 0, 0);
+  FLY.drag = false; FLY.lookX = FLY.lookY = 0; FLY.vel.set(0, 0, 0); LOOK.inside = false;
   stickEnd();
 }
-addEventListener('mouseleave', () => {});   // (the hover holds its last target when the cursor leaves the frame)
 addEventListener('blur', releaseMovement);
 addEventListener('focusin', e => { if (isEditingControl(e.target)) releaseMovement(); });
 addEventListener('visibilitychange', () => { if (document.hidden) releaseMovement(); });
