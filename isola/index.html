@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <title>Isola Quieta — live world</title>
-<link rel="modulepreload" href="./dist/main.js?v=v248">
+<link rel="modulepreload" href="./dist/main.js?v=v249">
 <style>
   html, body { margin: 0; height: 100%; overflow: hidden; background: #5d5f7e; }
   #app { position: fixed; inset: 0; }
@@ -161,8 +161,8 @@
 // line and main.js's BUILD in step); ?cb=<x> busts it while developing
 const q = new URLSearchParams(location.search);
 // the height grids leave with the program, not after it (a <link preload> did this in Chrome; WebKit fetched them twice)
-window.GRIDS_FETCH = fetch('./world-grids.bin?v=v248');
-import((q.has('src') ? './src/main.js' : './dist/main.js') + '?v=v248' + (q.get('cb') ? '&cb=' + encodeURIComponent(q.get('cb')) : ''));
+window.GRIDS_FETCH = fetch('./world-grids.bin?v=v249');
+import((q.has('src') ? './src/main.js' : './dist/main.js') + '?v=v249' + (q.get('cb') ? '&cb=' + encodeURIComponent(q.get('cb')) : ''));
 </script>
 </body>
 </html>

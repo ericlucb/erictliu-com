@@ -27,18 +27,19 @@ import windowVariants from '../window-variants.json' with { type: 'json' };
 import treeVolumeData from '../tree-volume-lighting.json' with { type: 'json' };
 import treeCrownJson from '../tree-crown.json' with { type: 'json' };
 import rearEntryRoute from '../rear-entry-route.json' with { type: 'json' };
+import M from '../world.json' with { type: 'json' };   // V249: the Blender names, by role (tests/world-manifest.test.mjs)
 import { bakeWorldTransform } from './bake-world-transform.js';
 import { EMBED, tellParent, waitForDoor } from './embed.js';
-import { BOAT, initBoat, updateBoat, boatify } from './boat.js';
+import { initBoat, updateBoat, boatify } from './boat.js';
 import { BLADE_LOD, applyBladeLod } from './blade-lod.js';
 import { failPanel, installLoadGuards } from './load-panel.js';
 import { releaseCpuCopies, halveTexture, halveTextures, releaseImages } from './memory.js';
-import { WORLD_TAG, WORLD_BYTES, resolveWorldUrl, worldBytes } from './world-file.js';
+import { WORLD_BYTES, resolveWorldUrl, worldBytes } from './world-file.js';
 import { installStats } from './stats.js';
 
 // cache-buster: one label per build, so a reload re-uses the cached 117 MB
 // GLB instead of fetching it again (v115 stamped the clock on every load)
-const BUILD = 'v248';
+const BUILD = 'v249';
 // V242: the world's parse finishes in ~200 ms now (meshopt), sooner than
 // this module finishes evaluating - it suspends on later top-level awaits -
 // so the load callback must wait for the module's last line, or it reads
@@ -87,7 +88,8 @@ const DOOR = EMBED ? waitForDoor(GLB_ABS, BUILD, WORLD_BYTES) : null;
 // the canvas itself (the painterly target keeps its 4x; the post quad has
 // no edges to smooth). The timed-frame ladder (V237) still runs on top.
 const MEMORY_TIER = TOUCH || Q.get('tier') === 'phone';
-if (MEMORY_TIER) window.SHADOW_FORCE = 1024;   // V248: was 2048 (a 1024 map is 8 MB, not 32; a phone's screen shows the softer edge less than a monitor does)
+if (MEMORY_TIER) window.SHADOW_FORCE = 1024;
+if (DEV && Q.get('shadow')) window.SHADOW_FORCE = +Q.get('shadow');   // an experiment knob for the gate (--q 'shadow=2048')   // V248: was 2048 (a 1024 map is 8 MB, not 32; a phone's screen shows the softer edge less than a monitor does)
 const renderer = new THREE.WebGLRenderer({
   antialias: Q.has('aa'),            // the painterly path resolves its own MSAA; ?aa=1 for painterly-off dev views
   preserveDrawingBuffer: Q.has('capture'),
@@ -168,7 +170,7 @@ ROOM_PAINT.value.colorSpace=THREE.SRGBColorSpace;
   dome.renderOrder = -3;
   scene.add(dome);
 
-  const panoTex = new THREE.TextureLoader().load('./sky_panorama.jpg?v=' + BUILD, (t) => { if (MEMORY_TIER) halveTexture(t, 1024); });
+  const panoTex = new THREE.TextureLoader().load('./sky_panorama.jpg?v=' + BUILD, (t) => { if (MEMORY_TIER) halveTexture(t, 1024); else if (DEV && Q.get('sky') === 'half') halveTexture(t, 1024); });   // (?sky=half: the gate's experiment)
   EXTRA_TEXTURES.push(panoTex);
   panoTex.colorSpace = THREE.SRGBColorSpace;
   panoTex.wrapS = THREE.RepeatWrapping;
@@ -213,47 +215,6 @@ ROOM_PAINT.value.colorSpace=THREE.SRGBColorSpace;
   band.position.y = R_BAND * 0.747 * tanBot + bandH / 2;
   band.renderOrder = -2;
   scene.add(band);
-}
-
-// === REAL GHIBLI CLOUDS (rendered from the Ghibli Cloud blend on this
-// machine, cropped to alpha) - billboard sprites drifting above the
-// painted band so the sky has depth instead of one flat wall.
-const skyClouds = [];
-{
-  const loader2 = new THREE.TextureLoader();
-  // (the six cloud cut-outs load only when a PUFF asks for them - the list is
-  // empty since 2026-09-02 and the loads were six wasted requests)
-  const texes = new Proxy({}, { get: (_, i) => { const t = loader2.load(`./clouds/paint_${i}.png?v=` + BUILD); t.colorSpace = THREE.SRGBColorSpace; return t; } });
-  // SCATTERED, DRAMATICALLY VARIED ('different shapes, some long some
-  // wider, scattered around, some bigger some smaller'). The island is
-  // ~90 m across, so clouds run 60-260 m - the old ones were 700 m
-  // pancakes lying on the water. Each entry:
-  //   [azimuth, radius, altitude, width, aspect(w/h), texture]
-  // aspect 3.4 = long wispy streak, 1.3 = compact puff.
-  const PUFFS = [   // EMPTIED 2026-09-02 ('remove the extra clouds it looks bad') - the band carries the sky
-  /*
-    // above and nearer the home ('closer to the home a little bit'),
-    // varied shapes: two towers, three band fragments, one tower top
-    [0.35,  420, 150, 130, 2.63, 0], [1.20,  640, 210, 175, 3.03, 1],
-    [2.05,  380, 120, 105, 4.01, 2], [2.85,  760, 260, 150, 3.08, 3],
-    [3.60,  520, 170, 115, 2.28, 4], [4.35,  680, 230, 140, 1.86, 5],
-    [5.10,  450, 140, 120, 2.63, 0], [5.80,  820, 280, 190, 3.03, 1],
-    [0.80, 1050, 330, 210, 4.01, 2], [3.20, 1150, 360, 230, 1.86, 5],
-  */
-  ];
-  for (const [az, R, alt, w, aspect, ti] of PUFFS) {
-    const mat = new THREE.SpriteMaterial({
-      map: texes[ti], transparent: true, depthWrite: false,
-      fog: false, opacity: 0.92,            // painted cut-outs: as solid as the band
-    });
-    const sp = new THREE.Sprite(mat);
-    sp.position.set(14.5 + Math.cos(az) * R, alt, Math.sin(az) * R);
-    sp.scale.set(w, w / aspect, 1);
-    sp.renderOrder = -1;
-    sp.userData.az = az; sp.userData.R = R; sp.userData.alt = alt;
-    scene.add(sp);
-    skyClouds.push(sp);
-  }
 }
 
 // open on the HERO pose (blender: cam (3,-120,4.45) -> target (8,0,4.45),
@@ -635,7 +596,6 @@ function collideCamera(vel) {
     if (r < t.r) { const s = t.r / Math.max(r, 1e-4); p.x = t.x + dx * s; p.z = t.z + dz * s; if (vel) vel.multiplyScalar(0.2); }
   }
 }
-const clouds = [];
 const worldMeshes = [];
 let seaMesh = null;      // the Reflector plane - its level breathes (ebb)
 const UP = new THREE.Vector3(0, 1, 0);
@@ -1034,8 +994,8 @@ function markBareTwigs(root) {
   let bark = null, leaf = null;
   root.traverse(o => { if (!o.isMesh) return;
     const name = o.material?.name || '';
-    if (/IllustratedBark/.test(name) && hasAttr(o.geometry, '_sroot')) bark = o;
-    else if (/IllustratedLeaf/.test(name) && hasAttr(o.geometry, '_leaf_pivot')) leaf = o; });
+    if (name.includes(M.substrings.bark) && hasAttr(o.geometry, '_sroot')) bark = o;
+    else if (name.includes(M.substrings.leaf) && hasAttr(o.geometry, '_leaf_pivot')) leaf = o; });
   if (!bark || !leaf || !CROWN.mask.value) return;
   const t0 = performance.now();
   const img = CROWN.mask.value.image;
@@ -1713,7 +1673,7 @@ if (worldBuf) loader.parse(worldBuf, './', async (gltf) => {
       o.geometry.boundingBox = null; o.geometry.boundingSphere = null; o.geometry.computeBoundingSphere();
       if (DEV) (T_LOAD.dequant = T_LOAD.dequant || []).push([o.name, Math.round(performance.now() - tq), 'sphere', Math.round(performance.now() - ts)]);
     }
-    if (o.name.includes('clothes')) {   // the cloth rig writes float normals back into this array every frame
+    if (o.name.includes(M.substrings.clothes)) {   // the cloth rig writes float normals back into this array every frame
       const nA = o.geometry.attributes.normal;
       if (nA && !(nA.array instanceof Float32Array)) { const out = new Float32Array(nA.count * 3); for (let i = 0; i < nA.count; i++) for (let k = 0; k < 3; k++) out[i * 3 + k] = nA.getComponent(i, k); o.geometry.setAttribute('normal', new THREE.BufferAttribute(out, 3)); }
     }
@@ -1721,14 +1681,14 @@ if (worldBuf) loader.parse(worldBuf, './', async (gltf) => {
     // export has it 8.8 m from the trunk; Oga's sits 2 m to its left. Moved
     // here, before its collider is registered below. The turf is level
     // between the two spots (1.18 and 1.19 m), so the height stands.
-    if (/HM_bench/.test(o.name)) { o.position.set(26.8, o.position.y, -2.3); o.updateWorldMatrix(true, false); }
+    if (o.name.includes(M.substrings.bench)) { o.position.set(26.8, o.position.y, -2.3); o.updateWorldMatrix(true, false); }
     const m = o.material;
     const tex = (m && (m.emissiveMap || m.map)) || null;
     if (tex) {
       tex.colorSpace = THREE.SRGBColorSpace;
       // Preserve dedicated joinery detail at an oblique inspection angle.
-      o.userData.uniformPlaster = !!m?.name?.startsWith('WEB_HM_home_plaster_');
-      if (m?.name?.startsWith('WEB_HM_home_')) {
+      o.userData.uniformPlaster = !!m?.name?.startsWith(M.prefixes.housePlaster);
+      if (m?.name?.startsWith(M.prefixes.housePart)) {
         tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
       }
     }
@@ -1739,19 +1699,18 @@ if (worldBuf) loader.parse(worldBuf, './', async (gltf) => {
       o.geometry.deleteAttribute('color_1');
     }
     const hasVC = !!o.geometry.attributes.color;
-    const isPath = !!m?.name?.startsWith('WEB_path_');
+    const isPath = !!m?.name?.startsWith(M.prefixes.path);
     if (isPath && tex) tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
-    const isCloud = o.name.startsWith('WEBCLOUD');
     // round 7: the card canopy (build_card_tree.py -> 50_export_web.py
     // WEB_HM_tree_og_cards) is decided by OBJECT name, before the material
     // name ('..._cards_mat' contains 'card') can file it under the meadow's
     // petal path: it takes the TREE wind, not the field, and a hard cut
-    const isIllustratedBark = !!m?.name?.includes('IllustratedBark');
-    const isIllustratedLeaf = !!m?.name?.includes('IllustratedLeaf');
-    const isOilTree = !!m?.name?.endsWith('_Oil') && (isIllustratedBark || isIllustratedLeaf);
-    const isTreeCards = o.name === 'WEB_HM_tree_og_cards' || isIllustratedLeaf;
-    const isPetal = !isTreeCards && (m && m.name && (m.name.includes('petal') || m.name.includes('card')));   // tree pad cards cut out like petals
-    if (o.name === 'WEB_water') {
+    const isIllustratedBark = !!m?.name?.includes(M.substrings.bark);
+    const isIllustratedLeaf = !!m?.name?.includes(M.substrings.leaf);
+    const isOilTree = !!m?.name?.endsWith(M.substrings.oil) && (isIllustratedBark || isIllustratedLeaf);
+    const isTreeCards = isIllustratedLeaf;   // (the separate card mesh left the world; the leaf mesh is the cards)
+    const isPetal = !isTreeCards && (m && m.name && m.name.includes(M.substrings.petal));   // tree pad cards cut out like petals
+    if (o.name === M.nodes.water) {
       // DYNAMIC WATER ('watercolor overlay, but there should be
       // reflections - create that dynamically'): a Reflector renders
       // the mirrored scene each frame; its shader is replaced with a
@@ -2039,25 +1998,24 @@ if (worldBuf) loader.parse(worldBuf, './', async (gltf) => {
       // textured mesh that also multiplies its vertex colour
       vertexColors: (isTreeCards || isIllustratedBark || isPath) ? hasVC : (hasVC && !tex),
       side: THREE.DoubleSide,
-      fog: !isCloud,
+      fog: true,
     });
     mat.name=m?.name||'';
     // V211: the plate's front door is a deeper tan (#c29d6c) than the
     // ingredient's pale oak; a modest multiply, the grain untouched
-    if (m?.name === 'WEB_HM_home_paint_8') mat.color.setRGB(0.86, 0.82, 0.76);
+    if (m?.name === M.materials.housePaintRetint) mat.color.setRGB(0.86, 0.82, 0.76);
     // V219: the rowboat rides the water (heave, roll, pitch about its own
     // axes); the mooring rope's boat end follows, its pier end stays put
-    if (m?.name === 'WEB_HM_shore_paint_0' || m?.name === 'WEB_HM_shore_paint_2') boatify(mat, o, m.name.endsWith('_2'));
+    if (m?.name === M.materials.boat || m?.name === M.materials.rope) boatify(mat, o, m.name === M.materials.rope);
     if (!tex && !hasVC && m) {
       mat.color.copy(m.emissive && m.emissive.getHex() ? m.emissive : m.color);
     }
     // Compressed green turf feathers into the meadow through vertex alpha.
-    if (m?.name === 'WEB_path_0') {
+    if (m?.name === M.materials.path0) {
       mat.transparent = true;
       mat.depthWrite = false;
       mat.forceSinglePass = true;
     }
-    if (isCloud) { mat.transparent = true; mat.depthWrite = false; }
     if (isPetal) { mat.alphaTest = 0.5; mat.transparent = true; }
     if (isTreeCards) {
       // hard 1-bit cut like the reference files (AnimeTree: GREATER_THAN
@@ -2069,7 +2027,7 @@ if (worldBuf) loader.parse(worldBuf, './', async (gltf) => {
     // Window paint is the interior; sky reflection is sampled from the same
     // cylindrical panorama as the world, using the reflected viewing ray.
     // A continuous world ray spans all panes; muntins and reveals stay matte.
-    if (m?.name?.startsWith('WEB_HM_home_window_')) {
+    if (m?.name?.startsWith(M.prefixes.houseWindow)) {
       mat.onBeforeCompile = (sh) => {
         sh.uniforms.uWindowSky = WINDOW_SKY;
         sh.uniforms.uVisibleSun=VISIBLE_SUN;sh.uniforms.uVisibleSunOn=VISIBLE_SUN_ON;
@@ -2172,14 +2130,14 @@ if (worldBuf) loader.parse(worldBuf, './', async (gltf) => {
       mat.customProgramCacheKey = () => 'painted-window-glass-v221';
     }
     if (o.userData.uniformPlaster) plasterLighting(mat,THREE,plasterColor,OIL_SUN,SHADOW,SHADOW_FRAG,PLASTER_LIVE);
-    const isChimney=!!m?.name?.startsWith('WEB_HM_home_chimney_');
-    const isFlashing=!!m?.name?.startsWith('WEB_HM_home_flashing_');
+    const isChimney=!!m?.name?.startsWith(M.prefixes.houseChimney);
+    const isFlashing=!!m?.name?.startsWith(M.prefixes.houseFlashing);
     if(isChimney||isFlashing) chimneyLighting(mat,THREE,OIL_SUN,SHADOW,SHADOW_FRAG,PLASTER_LIVE,isFlashing);
-    const isBench = /HM_bench/.test(o.name);
+    const isBench = o.name.includes(M.substrings.bench);
     if(isBench) benchLighting(mat,OIL_SUN,SHADOW,SHADOW_FRAG,PLASTER_LIVE);
-    const isGarden=!!m?.name?.startsWith('WEB_HM_home_garden_');
+    const isGarden=!!m?.name?.startsWith(M.prefixes.houseGarden);
     if(isGarden||isPath) gardenLighting(mat,OIL_SUN,SHADOW,SHADOW_FRAG,PLASTER_LIVE,isPath);
-    if(m?.name?.startsWith('WEB_HM_home_garden_37')) {
+    if(m?.name?.startsWith(M.materials.houseSillFlowers)) {
       o.updateWorldMatrix(true,false);
       const worldToLocal=new THREE.Matrix3().setFromMatrix4(o.matrixWorld).invert();
       sillWind(mat,Grass,WIND.t,worldToLocal);
@@ -2198,9 +2156,9 @@ if (worldBuf) loader.parse(worldBuf, './', async (gltf) => {
     if (castsSceneShadow(o.name,m?.name)) {
       o.castShadow = true;
       o.receiveShadow = true;
-      if (/home/.test(o.name)) registerBox(o, COLLIDE.pad);
-      else if (/bench|clothes/.test(o.name)) registerBox(o, 0.8);
-    } else if (!isCloud) {
+      if (o.name.includes(M.substrings.house)) registerBox(o, COLLIDE.pad);
+      else if (o.name.includes(M.substrings.bench) || o.name.includes(M.substrings.clothes)) registerBox(o, 0.8);
+    } else {
       o.receiveShadow = true;
     }
     // Canopy transmission keeps overlapping cards readable while their custom
@@ -2214,8 +2172,8 @@ if (worldBuf) loader.parse(worldBuf, './', async (gltf) => {
     // primitive, one record per blade) holds root, tint, phase, vertex count
     // and triangle pattern. Expand the table per vertex, generate the index,
     // split into the spatial chunks; the blade shader runs in ROOT_REL mode.
-    if (o.name === 'WEB_meadow' || o.parent?.name === 'WEB_meadow') {
-      const table = root.getObjectByName('WEB_meadow_table');
+    if (o.name === M.nodes.meadow || o.parent?.name === M.nodes.meadow) {
+      const table = root.getObjectByName(M.nodes.meadowTable);
       const tg = table && (table.geometry || table.children[0]?.geometry);
       if (!tg) { console.warn('meadow repack: no WEB_meadow_table'); return; }
       const g = o.geometry, ex = g.userData || {};   // three puts primitive extras on the geometry
@@ -2349,7 +2307,7 @@ if (worldBuf) loader.parse(worldBuf, './', async (gltf) => {
       o.userData.shadowRole = { material: m?.name, cast: false, receive: true, response: 'meadow' };
       return;
     }
-    if (o.name === 'WEB_meadow_table' || o.parent?.name === 'WEB_meadow_table') { o.visible = false; return; }
+    if (o.name === M.nodes.meadowTable || o.parent?.name === M.nodes.meadowTable) { o.visible = false; return; }
     // V233 (Eric: 'a weird artifact on the chimney when zoomed out that
     // disappears zoomed in'): the chimney caps (paint_17) and the flashing
     // (flashing_16) are vertex-coloured and untextured too, so they fell in
@@ -2378,8 +2336,8 @@ if (worldBuf) loader.parse(worldBuf, './', async (gltf) => {
       o.customDepthMaterial=petalDepth;
       o.castShadow=true;
     }
-    else if (o.parent && o.parent.name === 'WEB_island' && tex && !isPetal && !isPath) { shorify(mat); if (!COLLIDE.grid) setTimeout(() => { if (!COLLIDE.grid) buildGroundGrid(o); }, 1500); }
-    else if (o.name === 'WEB_HM_tree_og' || isIllustratedBark) {   // the tree's woody body registers its collider
+    else if (o.parent && o.parent.name === M.nodes.island && tex && !isPetal && !isPath) { shorify(mat); if (!COLLIDE.grid) setTimeout(() => { if (!COLLIDE.grid) buildGroundGrid(o); }, 1500); }
+    else if (o.name === M.nodes.tree || isIllustratedBark) {   // the tree's woody body registers its collider
       // WIND SPACE (PLAN_V4: 'the rubbery, over-sized, wrongly-directed
       // sway'): windify's tree branch computes WORLD-metre offsets and adds
       // them to 'transformed', which is LOCAL - under this node's scale
@@ -2566,24 +2524,24 @@ if (worldBuf) loader.parse(worldBuf, './', async (gltf) => {
       }
       mat.customProgramCacheKey = () => 'treecards-' + o.name;
       console.log(`tree cards: ${o.geometry.attributes.position.count} verts, tint ${hasVC ? 'COLOR_0' : 'none'}, canopy ${Tree.height.toFixed(1)} m x ${Tree.uWidth.value.toFixed(1)} m`);
-    } else if (o.name.includes('clothes')) {
+    } else if (o.name.includes(M.substrings.clothes)) {
       Cloth.pending = o;   // V242: the rig (0.5 s on an M3 Max) is built after the door opens; the laundry hangs still until then
     }
     const isMeadow=(hasVC&&!tex&&!isPath&&!isGarden&&!/^WEB_HM_home_/.test(m?.name||''))||isPetal;
     const hasAuthoredLighting=o.userData.uniformPlaster||isChimney||isFlashing||isBench||isGarden||isPath||isTreeCards||isMeadow;
-    if(!isCloud&&!hasAuthoredLighting) sceneLighting(mat,OIL_SUN,SHADOW,PLASTER_LIVE,{
-      wind:o.name==='WEB_HM_tree_og'||isIllustratedBark,
-      turf:o.parent?.name==='WEB_island',
-      glass:!!m?.name?.startsWith('WEB_HM_home_window_'),
+    if(!hasAuthoredLighting) sceneLighting(mat,OIL_SUN,SHADOW,PLASTER_LIVE,{
+      wind:o.name===M.nodes.tree||isIllustratedBark,
+      turf:o.parent?.name===M.nodes.island,
+      glass:!!m?.name?.startsWith(M.prefixes.houseWindow),
       roof:/^WEB_HM_home_paint_[12]$/.test(m?.name||''),
       bark:isIllustratedBark,                              // V219: darker away side on the trunk
-      soft:o.name.includes('clothes'),                     // V219: 'too much shadow' on the laundry
-      trim:m?.name==='WEB_HM_home_paint_39',               // V219: the roof edge's underside goes dark
+      soft:o.name.includes(M.substrings.clothes),                     // V219: 'too much shadow' on the laundry
+      trim:m?.name===M.materials.houseRoofEdgeTrim,               // V219: the roof edge's underside goes dark
       houseCentre:new THREE.Vector3(...plasterColor.center),
     });
     o.userData.keepPainted=true;
     o.userData.shadowRole={material:m?.name,cast:o.castShadow,receive:o.receiveShadow,
-      response:isCloud?'sky':isTreeCards?'translucent canopy':isMeadow?'meadow':hasAuthoredLighting?'authored sun/fill':'shared sun/fill'};
+      response:isTreeCards?'translucent canopy':isMeadow?'meadow':hasAuthoredLighting?'authored sun/fill':'shared sun/fill'};
     // painting <-> retexture blend, AFTER windify so the tree's wind hook is
     // chained, not replaced. Eric (2026-09-09) accepted the ONE-TEXTURE house
     // (PLAN_V4): the exporter now bakes the house without the projection and
@@ -2599,12 +2557,6 @@ if (worldBuf) loader.parse(worldBuf, './', async (gltf) => {
     // more, so asking for it only cost two 404s a load. heroBlendify stays
     // below, unused, for the day a single-material projected asset returns.
     void heroBlendify;
-    if (isCloud) {
-      o.userData.baseQuat = o.quaternion.clone();
-      o.userData.baseYaw = Math.atan2(camera.position.x - o.position.x,
-                                      camera.position.z - o.position.z);
-      clouds.push(o);
-    }
   };
   const meshList = []; root.traverse((o) => { if (o.isMesh) meshList.push(o); });
   const slow = [];
@@ -2617,7 +2569,7 @@ if (worldBuf) loader.parse(worldBuf, './', async (gltf) => {
   // V221: the step slab (WEB_HM_home_garden_27, 396 triangles) spans kit-local
   // x 1.379..3.079, plan y -1.49..-0.704 (GLB local z 0.704..1.49); its
   // footprint plus a 6 cm margin, in world, for the blade cull
-  { const house = root.getObjectByName('WEB_HM_home');
+  { const house = root.getObjectByName(M.nodes.house);
     if (house) {
       house.updateWorldMatrix(true, false);
       const c = house.localToWorld(new THREE.Vector3(2.229, 0, 1.097));
@@ -2629,11 +2581,11 @@ if (worldBuf) loader.parse(worldBuf, './', async (gltf) => {
   console.info('shadow-audit-v166 '+JSON.stringify(worldMeshes.map(o=>({name:o.name,...o.userData.shadowRole,movingDepth:!!o.customDepthMaterial}))));
   // the meadow field covers the island's footprint
   {
-    const isl = root.getObjectByName('WEB_island');
+    const isl = root.getObjectByName(M.nodes.island);
     const bb = new THREE.Box3().setFromObject(isl || root);
     Grass.init(bb);
   }
-  window.S = scene; window.CLOUDS = clouds; window.RENDERER = renderer;
+  window.S = scene; window.RENDERER = renderer;
   window.CAM = camera; window.CTRL = controls;
   window.PHYS = { Wind, Grass, Tree, Cloth };
   // live sun is the default mode - apply it once the world exists
@@ -2758,7 +2710,12 @@ let painterly = true;
 // texture on blit, so the ink/background masks keep working.
 const rt = new THREE.WebGLRenderTarget(2, 2, {
   minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter,
-  colorSpace: THREE.SRGBColorSpace, samples: MEMORY_TIER ? 2 : 4 });   // V248: 2x on a phone (its 4x was 52 of 82 MB of targets; the Kuwahara blur hides the difference)
+  colorSpace: THREE.SRGBColorSpace, samples: (DEV && +Q.get('msaa')) || 2 });
+// V249: 2x MSAA on every tier (was 4x on desktop). Measured against the 4x
+// baseline at 2880x1200: 1.4-2.5 % of pixels moved by more than 2 L, all of
+// them edge pixels in patches under 2,500 px, invisible at 2x zoom on the
+// house's roof tiles (the closest pose); 84 MB of render targets on a Mac.
+// ?msaa=4 brings the old target back for an A/B.   // V248: 2x on a phone (its 4x was 52 of 82 MB of targets; the Kuwahara blur hides the difference)
 // depth rides along so the ink line can be MASKED to the near world - at
 // 0.8 it was outlining every cloud lobe and water streak ('background
 // too dark'); the painting's sky and water carry no drawn line
@@ -3208,7 +3165,6 @@ $('c-light').addEventListener('change', () => {
 const fpsEl = document.getElementById('fps');
 let fpsFrames = 0, fpsT0 = performance.now();
 let windT = 0, lastNow = performance.now();
-const q = new THREE.Quaternion();
 const _camF = new THREE.Vector3();
 renderer.setAnimationLoop(() => {
   fpsFrames++;
@@ -3224,11 +3180,6 @@ renderer.setAnimationLoop(() => {
   lastNow = now;
   if (WIND.on) {
     windT += dt;
-    for (const sp of skyClouds) {          // slow cloud drift
-      const a = sp.userData.az + windT * 0.0016;
-      sp.position.set(14.5 + Math.cos(a) * sp.userData.R,
-                      sp.userData.alt, Math.sin(a) * sp.userData.R);
-    }
     Wind.step(dt);
     Grass.step(dt);
     Tree.step(dt);
@@ -3260,12 +3211,6 @@ renderer.setAnimationLoop(() => {
   if (!FLY.on) { controls.update(); collideCamera(null); }
   updateHeroBlend(now);              // painting <-> retexture, from the settled camera
   // (the meadow shadow uniforms follow the live sun inside drawFrame)
-  for (const c of clouds) {
-    const yaw = Math.atan2(camera.position.x - c.position.x,
-                           camera.position.z - c.position.z);
-    q.setFromAxisAngle(UP, yaw - c.userData.baseYaw);
-    c.quaternion.copy(q).multiply(c.userData.baseQuat);
-  }
   drawFrame();
 });
 // The water reads the camera every frame: its forward vector in xz (streak

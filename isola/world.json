@@ -1,0 +1,37 @@
+{
+  "about": "The Blender names the viewer depends on, by the role each plays. main.js reads them as M.* and carries no name of its own; tests/world-manifest.test.mjs checks every entry against web/island_world.glb, so a rename in Blender fails a test instead of the look.",
+  "nodes": {
+    "island": "WEB_island",
+    "meadow": "WEB_meadow",
+    "meadowTable": "WEB_meadow_table",
+    "house": "WEB_HM_home",
+    "tree": "WEB_HM_tree_og",
+    "water": "WEB_water"
+  },
+  "materials": {
+    "housePaintRetint": "WEB_HM_home_paint_8",
+    "houseRoofEdgeTrim": "WEB_HM_home_paint_39",
+    "houseSillFlowers": "WEB_HM_home_garden_37",
+    "boat": "WEB_HM_shore_paint_0",
+    "rope": "WEB_HM_shore_paint_2",
+    "path0": "WEB_path_0"
+  },
+  "prefixes": {
+    "housePart": "WEB_HM_home_",
+    "houseWindow": "WEB_HM_home_window_",
+    "housePlaster": "WEB_HM_home_plaster_",
+    "houseGarden": "WEB_HM_home_garden_",
+    "houseFlashing": "WEB_HM_home_flashing_",
+    "houseChimney": "WEB_HM_home_chimney_",
+    "path": "WEB_path_"
+  },
+  "substrings": {
+    "house": "home",
+    "bench": "HM_bench",
+    "clothes": "clothes",
+    "bark": "IllustratedBark",
+    "leaf": "IllustratedLeaf",
+    "oil": "_Oil",
+    "petal": "petal"
+  }
+}
