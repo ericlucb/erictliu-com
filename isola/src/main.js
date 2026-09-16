@@ -37,7 +37,7 @@ import { WORLD_TAG, WORLD_BYTES, resolveWorldUrl, worldBytes } from './world-fil
 
 // cache-buster: one label per build, so a reload re-uses the cached 117 MB
 // GLB instead of fetching it again (v115 stamped the clock on every load)
-const BUILD = 'v244';
+const BUILD = 'v245';
 // V242: the world's parse finishes in ~200 ms now (meshopt), sooner than
 // this module finishes evaluating - it suspends on later top-level awaits -
 // so the load callback must wait for the module's last line, or it reads
@@ -160,7 +160,7 @@ ROOM_PAINT.value.colorSpace=THREE.SRGBColorSpace;
   dome.renderOrder = -3;
   scene.add(dome);
 
-  const panoTex = new THREE.TextureLoader().load('./sky_panorama.jpg?v=' + BUILD, (t) => { if (MEMORY_TIER) halveTexture(t); });
+  const panoTex = new THREE.TextureLoader().load('./sky_panorama.jpg?v=' + BUILD, (t) => { if (MEMORY_TIER) halveTexture(t, 1024); });
   EXTRA_TEXTURES.push(panoTex);
   panoTex.colorSpace = THREE.SRGBColorSpace;
   panoTex.wrapS = THREE.RepeatWrapping;
@@ -988,6 +988,7 @@ const LOD = { value: 1 };
 // V236: the share of blades drawn into the water's mirror (1 = every blade
 // the main pass draws). window.MIRROR_KEEP sets it for A/B measurement.
 const MIRROR_KEEP = { value: 1 };
+const ROOT_Q = { c: { value: new THREE.Vector3() }, h: { value: new THREE.Vector3(1, 1, 1) } };   // V245: the blade table's node transform, for the shader's root
 // V236 - LOD BY DRAW RANGE. The blade LOD (V218) collapses a dropped blade in
 // the VERTEX shader, so the GPU still transforms every one of the meadow's
 // 3.4 M vertices through the wind shader; measured at the hero, drawing 10 %
@@ -1155,7 +1156,11 @@ function windify(material, kind, hasHeight = false, scl = [1, 1, 1], hasPhase = 
       // V234: the repacked meadow - POSITION is relative to the blade's root
       // (int16 over the node's scale), the world root is _root3 (expanded
       // from the blade table at load); _root, as the LOD reads it, is its xz
-      sh.vertexShader = '#define HAS_ROOT\n#define ROOT_REL\nattribute vec3 _root3;\n#define _root (_root3.xz)\n' + sh.vertexShader;
+      // V245: the root ships as the table's own int16 (padded to four), scaled
+      // in the shader by the table node's translation and scale - the same
+      // metres the CPU expansion used to write as float32 per vertex
+      sh.vertexShader = '#define HAS_ROOT\n#define ROOT_REL\nattribute vec4 _root3q;\nuniform vec3 uRootC, uRootH;\n#define _root3 (uRootC + uRootH * _root3q.xyz)\n#define _root (_root3.xz)\n' + sh.vertexShader;
+      sh.uniforms.uRootC = ROOT_Q.c; sh.uniforms.uRootH = ROOT_Q.h;
       // the repack ships _height as a (hf, 0) uint16 pair - see optimize_glb.py
       sh.vertexShader = sh.vertexShader.replace('attribute float _height;', 'attribute vec4 _height4;\n#define _height (_height4.x)');
     } else if (kind === 'blade' && hasRoot) {
@@ -2185,69 +2190,108 @@ if (worldBuf) loader.parse(worldBuf, './', async (gltf) => {
       const t0 = performance.now();
       // roots ship as int16 over the table node's box: world = matrixWorld * normalized
       table.updateWorldMatrix(true, false); const TM = (table.geometry ? table : table.children[0]).matrixWorld; const rv = new THREE.Vector3();
-      const root3 = new Float32Array(nv * 3), color = hasVertexColour ? null : new Uint8Array(nv * 3), phase = new Uint16Array(nv);
+      // V245 - THE MEADOW ON THE GPU AT ITS OWN PRECISION. Roots stay the
+      // table's int16 (padded to four shorts; the shader scales them by the
+      // table node's transform), and the index is uint16 per sub-chunk: each
+      // file chunk (a 4 m cell run of blades) is cut into runs of at most
+      // 65 535 vertices, every sub-chunk views the shared vertex streams at
+      // its own element offset and owns a small local index. 39 + 30 MB of
+      // float32 roots and uint32 indices became 27 + 15; no float32 copy is
+      // made at load. The draw-range LOD (V236) works per sub-chunk as before.
+      const rootQ = new Int16Array(nv * 4), color = hasVertexColour ? null : new Uint8Array(nv * 3), phase = new Uint16Array(nv);
       const trisPer = patterns.map(p => p.length / 3);
-      let ntri = 0; for (let b = 0; b < nb; b++) ntri += trisPer[T.pat.getX(b)] || 0;
-      const index = new Uint32Array(ntri * 3);
-      let v = 0, k = 0;
-      const vstart = new Uint32Array(nb + 1), bph = new Uint16Array(nb);
+      let v = 0;
+      const vstart = new Uint32Array(nb + 1), bph = new Uint16Array(nb), rootW = new Float32Array(nb * 3);
       for (let b = 0; b < nb; b++) {
         if ((b & 0x3fff) === 0 && b) await maybeYield({ type: 'stage', stage: 'expanding', frac: 0.6 * b / nb });
-        rv.fromBufferAttribute(T.root, b).applyMatrix4(TM);
-        const c = T.cnt.getX(b), rx = rv.x, ry = rv.y, rz = rv.z;
         // (the table's streams are stride-padded by the compressor, so three
         // hands them over as interleaved attributes: read through getX, never
         // the raw array; getX denormalises, so scale back to the byte / short)
+        const qx = Math.round(T.root.getX(b) * 32767), qy = Math.round(T.root.getY(b) * 32767), qz = Math.round(T.root.getZ(b) * 32767);
+        rv.set(qx, qy, qz).divideScalar(32767).applyMatrix4(TM); rootW[b * 3] = rv.x; rootW[b * 3 + 1] = rv.y; rootW[b * 3 + 2] = rv.z;
+        const c = T.cnt.getX(b);
         const ph = Math.round(T.ph.getX(b) * 65535);
         vstart[b] = v; bph[b] = ph;
-        for (let j = 0; j < c; j++) { root3[(v + j) * 3] = rx; root3[(v + j) * 3 + 1] = ry; root3[(v + j) * 3 + 2] = rz; phase[v + j] = ph; }
+        for (let j = 0; j < c; j++) { const q = (v + j) * 4; rootQ[q] = qx; rootQ[q + 1] = qy; rootQ[q + 2] = qz; phase[v + j] = ph; }
         if (color) { const c0 = Math.round(T.col.getX(b) * 255), c1 = Math.round(T.col.getY(b) * 255), c2 = Math.round(T.col.getZ(b) * 255); for (let j = 0; j < c; j++) { color[(v + j) * 3] = c0; color[(v + j) * 3 + 1] = c1; color[(v + j) * 3 + 2] = c2; } }
         v += c;
       }
       vstart[nb] = v;
       if (v !== nv) console.warn('meadow repack: vertex count mismatch', v, nv);
-      // V236: the index, chunk by chunk, each chunk's blades in ascending r1
-      // (= fract(_phase), the shader's LOD random) so a keep fraction is a
-      // prefix of the chunk's index - see applyBladeLod. The blade order in
-      // the file (by 4 m cell) is untouched; only the index order changes.
+      { const t = new THREE.Vector3(), r = new THREE.Quaternion(), sc = new THREE.Vector3(); TM.decompose(t, r, sc);
+        if (Math.abs(r.w) < 0.9999) console.warn('meadow repack: the table node is rotated; roots will be off');
+        ROOT_Q.c.value.copy(t); ROOT_Q.h.value.copy(sc); }
+      // the vertex streams every sub-chunk will view: the file's (interleaved
+      // by the compressor) and the expanded ones
+      if (g.attributes._height && !g.attributes._height4) { g.setAttribute('_height4', g.attributes._height); g.deleteAttribute('_height'); }
+      const streams = {};
+      for (const [k, a] of Object.entries(g.attributes)) streams[k] = a;
+      streams._root3q = new THREE.InterleavedBufferAttribute(new THREE.InterleavedBuffer(rootQ, 4), 3, 0, true);
+      streams._phase = new THREE.BufferAttribute(phase, 1, true);
+      if (color) streams.color = new THREE.BufferAttribute(color, 3, true);
+      const view = (a, vA, vB) => {   // the stream from vertex vA, so that local index 0 is vertex vA
+        if (a.isInterleavedBufferAttribute) return new THREE.InterleavedBufferAttribute(a.data, a.itemSize, a.offset + vA * a.data.stride, a.normalized);
+        return new THREE.BufferAttribute(a.array.subarray(vA * a.itemSize, vB * a.itemSize), a.itemSize, a.normalized);
+      };
+      // sub-chunks: at most 65 535 vertices (uint16), about four per file chunk
       const tex = tg.userData || {};
       const chunkDefs = (tex.bladeChunks && tex.bladeChunks.length) ? tex.bladeChunks : [{ bladeStart: 0, bladeCount: nb }];
       const chunks = [];
       for (let ci = 0; ci < chunkDefs.length; ci++) {
-        const ch = chunkDefs[ci];
-        const n = ch.bladeCount, keys = new Float64Array(n);
-        for (let i = 0; i < n; i++) keys[i] = bph[ch.bladeStart + i] * 1048576 + i;   // (phase << 20) | local id: one numeric sort
-        keys.sort();
-        const start = k, lodR1 = new Float32Array(n), lodEnd = new Uint32Array(n);
-        for (let i = 0; i < n; i++) {
-          const b = ch.bladeStart + (keys[i] % 1048576), ph = bph[b];
-          const pat = patterns[T.pat.getX(b)], v0 = vstart[b];
-          for (let j = 0; j < pat.length; j++) index[k++] = v0 + pat[j];
-          lodR1[i] = ph === 65535 ? 0 : Math.fround(ph / 65535);   // fract() of the normalised ushort
-          lodEnd[i] = k - start;
+        const ch = chunkDefs[ci], bEnd = ch.bladeStart + ch.bladeCount;
+        // the file chunk's box is the roots' box plus the blade reach: recover the reach
+        let rmax = [-1e9, -1e9, -1e9], rmin = [1e9, 1e9, 1e9];
+        for (let b = ch.bladeStart; b < bEnd; b++) for (let k = 0; k < 3; k++) { const r = rootW[b * 3 + k]; if (r > rmax[k]) rmax[k] = r; if (r < rmin[k]) rmin[k] = r; }
+        const pad = ch.max ? [0, 1, 2].map(k => Math.max(ch.max[k] - rmax[k], rmin[k] - ch.min[k], 0)) : [1, 1, 1];
+        const target = Math.ceil(ch.bladeCount / 4);
+        let bA = ch.bladeStart;
+        while (bA < bEnd) {
+          let bB = bA, vc = 0;
+          while (bB < bEnd && (bB - bA) < target) { const c = vstart[bB + 1] - vstart[bB]; if (vc + c > 65535) break; vc += c; bB++; }
+          if (bB === bA) { bB = bA + 1; }   // (a single blade never exceeds 65 535)
+          const n = bB - bA, keys = new Float64Array(n);
+          for (let i = 0; i < n; i++) keys[i] = bph[bA + i] * 1048576 + i;   // (phase << 20) | local id: one numeric sort
+          keys.sort();
+          let ntriC = 0; for (let b = bA; b < bB; b++) ntriC += trisPer[T.pat.getX(b)] || 0;
+          const index = new Uint16Array(ntriC * 3), lodR1 = new Float32Array(n), lodEnd = new Uint32Array(n);
+          const vA = vstart[bA], vB = vstart[bB]; let k = 0;
+          for (let i = 0; i < n; i++) {
+            const b = bA + (keys[i] % 1048576), ph = bph[b];
+            const pat = patterns[T.pat.getX(b)], v0 = vstart[b] - vA;
+            for (let j = 0; j < pat.length; j++) index[k++] = v0 + pat[j];
+            lodR1[i] = ph === 65535 ? 0 : Math.fround(ph / 65535);   // fract() of the normalised ushort
+            lodEnd[i] = k;
+          }
+          const min = [0, 1, 2].map(k => { let m = 1e9; for (let b = bA; b < bB; b++) m = Math.min(m, rootW[b * 3 + k]); return m - pad[k]; });
+          const max = [0, 1, 2].map(k => { let m = -1e9; for (let b = bA; b < bB; b++) m = Math.max(m, rootW[b * 3 + k]); return m + pad[k]; });
+          chunks.push({ vA, vB, index, min, max, lodR1, lodEnd });
+          bA = bB;
         }
-        chunks.push({ start, count: k - start, min: ch.min, max: ch.max, lodR1, lodEnd });
         await maybeYield({ type: 'stage', stage: 'expanding', frac: 0.6 + 0.4 * (ci + 1) / chunkDefs.length });
       }
-      if (k !== ntri * 3) console.warn('meadow repack: index count mismatch', k, ntri * 3);
-      g.setAttribute('_root3', new THREE.BufferAttribute(root3, 3));
-      // the shader reads the padded height stream as _height4 (three binds
-      // attributes by name; an unbound one reads zero - which darkened every
-      // blade to the gradient's root tone in the first test)
-      if (g.attributes._height && !g.attributes._height4) { g.setAttribute('_height4', g.attributes._height); g.deleteAttribute('_height'); }
-      if (color) g.setAttribute('color', new THREE.BufferAttribute(color, 3, true));
-      g.setAttribute('_phase', new THREE.BufferAttribute(phase, 1, true));
-      g.setIndex(new THREE.BufferAttribute(index, 1));
-      g.userData.bladeChunks = chunks; g.userData.bladeRestBaked = true;
       table.removeFromParent(); tg.dispose();           // V240: its streams are expanded; nothing reads it again
       T_LOAD.meadow = performance.now();
-      console.info(`meadow repack: ${nb} blades, ${nv} verts, ${ntri} tris, ${patterns.length} patterns, ${chunks.length} chunks expanded in ${(performance.now() - t0).toFixed(0)} ms`);
+      console.info(`meadow repack: ${nb} blades, ${nv} verts, ${patterns.length} patterns, ${chunks.length} sub-chunks (uint16) expanded in ${(performance.now() - t0).toFixed(0)} ms`);
       o.updateWorldMatrix(true, false);
       const sc = new THREE.Vector3(); o.matrixWorld.decompose(new THREE.Vector3(), new THREE.Quaternion(), sc);
       mat.vertexColors = true; mat.needsUpdate = true;      // the tint comes from the table, not the primitive
       windify(mat, 'blade', true, sc.toArray(), true, true, true);
-      const chunkMeshes = splitBladeChunks(o);
-      chunkMeshes.forEach((mesh, i) => { if (chunks[i] && chunks[i].min && chunks[i].max) BLADE_LOD.push({ mesh, c: chunks[i] }); });
+      // one mesh per sub-chunk: shared streams at an offset, its own index and bounds
+      const chunkMeshes = [];
+      chunks.forEach((c, i) => {
+        const cg = new THREE.BufferGeometry();
+        for (const [k, a] of Object.entries(streams)) cg.setAttribute(k, view(a, c.vA, c.vB));
+        cg.setIndex(new THREE.BufferAttribute(c.index, 1));
+        const bb = new THREE.Box3(); bb.min.set(...c.min).divide(o.scale); bb.max.set(...c.max).divide(o.scale);
+        cg.boundingBox = bb; cg.boundingSphere = bb.getBoundingSphere(new THREE.Sphere());
+        cg.userData = g.userData;
+        let m;
+        if (i === 0) { m = o; o.geometry = cg; }
+        else { m = new THREE.Mesh(cg, o.material); m.name = o.name + '_c' + i; m.userData = o.userData; m.castShadow = o.castShadow; m.receiveShadow = o.receiveShadow; o.parent.add(m); m.position.copy(o.position); m.quaternion.copy(o.quaternion); m.scale.copy(o.scale); worldMeshes.push(m); }
+        chunkMeshes.push(m); BLADE_LOD.push({ mesh: m, c });
+      });
+      g.dispose();
+      console.info(`blades: ${chunkMeshes.length} frustum-culled sub-chunks`);
       o.userData.keepPainted = true;                          // (o.material, userData.basic and worldMeshes were set above)
       o.userData.shadowRole = { material: m?.name, cast: false, receive: true, response: 'meadow' };
       return;
@@ -2539,7 +2583,7 @@ if (worldBuf) loader.parse(worldBuf, './', async (gltf) => {
   window.PHYS = { Wind, Grass, Tree, Cloth };
   // live sun is the default mode - apply it once the world exists
   $('c-light').dispatchEvent(new Event('change'));
-  if (MEMORY_TIER) halveTextures(scene, EXTRA_TEXTURES);
+  if (MEMORY_TIER) halveTextures(scene, EXTRA_TEXTURES, 1024);   // V245: a phone's screen resolves no more; the house's 1024x1536 sheets go to 512x768
   const freed = Q.has('nofree') ? 0 : releaseCpuCopies(scene, new Set([(Cloth.mesh || Cloth.pending) && (Cloth.mesh || Cloth.pending).geometry]));   // dev: ?nofree=1 keeps the CPU copies for inspection
   console.info(`memory: ${(freed / 1048576).toFixed(0)} MB of CPU geometry copies released after upload`);
   // V240: warm the shaders and uploads BEFORE saying ready, so the door

@@ -33,14 +33,14 @@ export function forEachTexture(root, fn, extra = []) {
   });
   for (const t of extra) visit(t);
 }
-export function halveTexture(t) {
-  const im = t.image; if (t.isDataTexture || !isBitmapImage(im) || im.width < 2048) return false;
+export function halveTexture(t, minWidth = 2048) {
+  const im = t.image; if (t.isDataTexture || !isBitmapImage(im) || im.width < minWidth) return false;
   const c = document.createElement('canvas'); c.width = im.width >> 1; c.height = im.height >> 1;
   c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
   if (im.close) im.close();
   t.image = c; t.needsUpdate = true; return true;
 }
-export function halveTextures(root, extra = []) { let n = 0; forEachTexture(root, t => { if (halveTexture(t)) n++; }, extra); console.info('memory tier: ' + n + ' textures halved'); }
+export function halveTextures(root, extra = [], minWidth = 2048) { let n = 0; forEachTexture(root, t => { if (halveTexture(t, minWidth)) n++; }, extra); console.info('memory tier: ' + n + ' textures halved'); }
 // after the upload the decoded image is dead weight (a 2048^2 bitmap is
 // 16 MB); keep only its size, which is all three reads without an update
 // Only textures the GPU already holds (renderer.properties knows), never a
