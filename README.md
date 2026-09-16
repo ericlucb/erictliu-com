@@ -95,14 +95,15 @@ Nothing else needs bumping — the viewer cache-busts its own files with its
 `BUILD` constant. The world file `isola/island_world.glb` is ~75 MB; GitHub
 warns above 50 MB but Pages serves files up to 100 MB.
 
-How the door works (`openDoor()` in `index.html`): a full-screen overlay with
-two leaves in the page's ink colour appears, and the viewer loads in an iframe
-behind them at `isola/?embed=1`. The viewer posts `{isola:'v1', type:'hello',
-glb}` with the exact URL of its world file; the page downloads that file with
-a real progress bar, stores it in the Cache API (`isola-world`) under that
-URL, and answers `{isola:'go'}`; the viewer then finds it in the cache and
-loads without a second download, reporting `progress` and finally `ready`,
-at which point the leaves swing open, the portrait's animation loop pauses
-and the iframe takes focus. `LEAVE` (top left) or Esc closes the door and
-resumes the page. If the page never answers, the viewer loads the world
-itself after 2.5 s, so `isola/` also works on its own.
+How the door works (`openDoor()` in `index.html`): nothing is fetched until
+the click. Then the ENTER link becomes a small door with a ring around it,
+the viewer starts in an iframe at `isola/?embed=1` behind the page, and the
+viewer posts `{isola:'v1', type:'hello', glb}` with the exact URL of its world
+file. The page downloads that file itself so the ring is honest, stores it
+in the Cache API (`isola-world`) under that URL, and answers `{isola:'go'}`;
+the viewer finds it in the cache (no second download), decodes it while the
+ring spins full, and posts `ready`, at which point the little door swings
+open, the world fades in over the page, the portrait's animation loop pauses
+and the iframe takes focus. `LEAVE` (top left) or Esc closes it and restores
+ENTER. If the page never answers, the viewer loads the world itself after
+2.5 s, so `isola/` also works on its own.
