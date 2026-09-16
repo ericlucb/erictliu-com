@@ -35,13 +35,13 @@
      HUD so the two hints read as one block. */
   #turn { display: none; align-items: center; gap: 8px; color: #f4efe3; font: 11px/1 -apple-system, "SF Pro Text", sans-serif;
     letter-spacing: .12em; text-transform: uppercase; pointer-events: none; text-shadow: 0 1px 5px rgba(20,20,40,.45);
-    opacity: 0; animation: tip-fade 1.2s ease forwards; }   /* fades in and stays: the tip shows whenever the phone is upright */
+    opacity: 0; animation: tip-fade 5s ease forwards; }   /* every visit: fades in, holds, fades out after five seconds; it stands on its own so nothing moves it */
   #turn svg { width: 18px; height: 18px; flex: none; animation: turn-phone 1.6s cubic-bezier(.5,.02,.18,1) .9s 1 both; transform-origin: 50% 50%; }
   body.touch.ready #turn { display: flex; }   /* (body.ready: the world is in view) */
   body.touch #turn.gone { display: none; }
   @media (orientation: landscape) { #turn { display: none !important; } }
   @keyframes turn-phone { from { transform: rotate(0deg); } to { transform: rotate(-90deg); } }
-  @keyframes tip-fade { 0% { opacity: 0; } 100% { opacity: .82; } }
+  @keyframes tip-fade { 0% { opacity: 0; } 12% { opacity: .82; } 75% { opacity: .82; } 100% { opacity: 0; } }
   @media (prefers-reduced-motion: reduce) { #turn svg { animation: none; transform: rotate(-90deg); } #turn { animation-duration: 4s; } }
   /* the look is a drag: the cursor is a hand over the world, a closed one while it drags */
   #app canvas { cursor: grab; }
@@ -72,10 +72,9 @@
   body.touch #hud { left: auto; top: auto; right: calc(64px + env(safe-area-inset-right, 0px)); bottom: calc(74px + env(safe-area-inset-bottom, 0px));
     transform: none; flex-direction: column-reverse; align-items: flex-end; gap: 12px;   /* the look hint level with the stick's centre (24px up, a 112px stick, a 20px row) */
     font: 11px/1 -apple-system, "SF Pro Text", sans-serif; letter-spacing: .08em; text-shadow: 0 1px 4px rgba(20,20,40,.4); }
-  body.touch #turn { position: fixed; left: 50%; right: auto; top: calc(9% + env(safe-area-inset-top, 0px)); transform: translateX(-50%); }   /* the tip up in the sky, where the clouds are */
+  body.touch #turn { position: fixed; left: 50%; right: auto; top: calc(9% + env(safe-area-inset-top, 0px)); transform: translateX(-50%); z-index: 30; }   /* the tip up in the sky, where the clouds are */
   body.touch #hud.used { transform: translateY(4px); opacity: 1; }   /* on a phone only the look hint fades once used; the tip stays */
   body.touch #hud.used .row-look { opacity: 0; transition: opacity 1.4s ease; }
-  body.touch #hud.used #turn { transform: translateX(-50%); }
   body.touch .row-move { display: none; }   /* a finger drags to look and moves with the stick */
   body.touch .row-look { gap: 9px; }
   body.touch .look-gesture { width: auto; }
@@ -137,8 +136,8 @@
       <path d="M17 16H4m4-4-4 4 4 4m39-4h13m-4-4 4 4-4 4"/>
     </svg>
   </span><span>drag to look</span></span>
-  <div id="turn" role="status"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2.2"/><path d="M11 18.5h2"/></svg><span>tip: turn sideways</span></div>
 </div>
+<div id="turn" role="status"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2.2"/><path d="M11 18.5h2"/></svg><span>tip: turn sideways</span></div>
 <div id="fps"></div>
 <div id="stick" aria-label="Move stick"><div class="base"></div><div class="knob"></div><div class="lbl">move</div></div>
 <!-- the LOOK panel (?dev=1) is built by src/dev-panel.js; its styles are .hud-panel above -->
