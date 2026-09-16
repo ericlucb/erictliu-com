@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <title>Isola Quieta — live world</title>
-<link rel="modulepreload" href="./dist/main.js?v=v260">
+<link rel="modulepreload" href="./dist/main.js?v=v262">
 <style>
   html, body { margin: 0; height: 100%; overflow: hidden; background: #5d5f7e; }
   #app { position: fixed; inset: 0; }
@@ -38,6 +38,7 @@
     letter-spacing: .06em; padding: 9px 14px 9px 11px; border-radius: 999px; background: rgba(35,43,51,.34);
     border: 1px solid rgba(244,239,227,.32); backdrop-filter: blur(6px); z-index: 30; cursor: pointer; text-shadow: 0 1px 4px rgba(20,20,40,.4); }
   #turn svg { width: 26px; height: 26px; flex: none; animation: turn-phone 2.6s ease-in-out infinite; transform-origin: 50% 50%; }
+  #turn span { white-space: nowrap; }
   #turn small { display: block; opacity: .7; font-size: 10px; letter-spacing: .04em; }
   body.touch #turn { display: flex; }
   body.touch #turn.gone { display: none; }
@@ -139,8 +140,8 @@
 // line and main.js's BUILD in step); ?cb=<x> busts it while developing
 const q = new URLSearchParams(location.search);
 // the height grids leave with the program, not after it (a <link preload> did this in Chrome; WebKit fetched them twice)
-window.GRIDS_FETCH = fetch('./world-grids.bin?v=v260');
-import((q.has('src') ? './src/main.js' : './dist/main.js') + '?v=v260' + (q.get('cb') ? '&cb=' + encodeURIComponent(q.get('cb')) : ''));
+window.GRIDS_FETCH = fetch('./world-grids.bin?v=v262');
+import((q.has('src') ? './src/main.js' : './dist/main.js') + '?v=v262' + (q.get('cb') ? '&cb=' + encodeURIComponent(q.get('cb')) : ''));
 </script>
 </body>
 </html>
