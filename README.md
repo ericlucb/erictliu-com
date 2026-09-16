@@ -92,8 +92,20 @@ rsync -a --delete --exclude README.md --exclude .DS_Store ../isola-quieta/web/ i
 ```
 
 Nothing else needs bumping — the viewer cache-busts its own files with its
-`BUILD` constant. The world file `isola/island_world.glb` is ~75 MB; GitHub
+`BUILD` constant. The world file `isola/island_world.glb` is ~58 MB; GitHub
 warns above 50 MB but Pages serves files up to 100 MB.
+
+**Hosting the world off the repo.** Every world update adds ~58 MB to this
+repo's history. To move the file to Cloudflare R2: create a bucket, upload
+`isola/island_world.glb`, give the bucket a public domain (`*.r2.dev` or a
+subdomain of erictliu.com), add a CORS rule allowing `GET` from
+`https://erictliu.com` with `Content-Length` exposed (the ring reads the body
+and needs the size), then set `static WORLD = 'https://…/island_world.glb'`
+in `index.html` (the `Component` class, just above `openDoor()`) and delete
+`isola/island_world.glb`. The door passes the URL to the viewer as
+`?world=`; the viewer accepts only `*.r2.dev`, `*.r2.cloudflarestorage.com`
+and `erictliu.com` hosts. Cache-busting is then by file name (put the
+viewer's build tag in the object key).
 
 How the door works (`openDoor()` in `index.html`): nothing is fetched until
 the click. Then the ENTER link becomes a small door with a ring around it,

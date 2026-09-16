@@ -431,6 +431,13 @@ class Component extends DCLogic {
   // will ask for, and tells the viewer to go. When the viewer reports ready
   // the little door swings open and the world fades in over the page; the
   // portrait's loop pauses. LEAVE (or Esc) closes it and restores ENTER.
+  // WORLD: leave empty and the world file is ./isola/island_world.glb (57 MB in
+  // this repo). To serve it from Cloudflare R2 instead, upload
+  // isola/island_world.glb to a bucket with a public domain and a CORS rule
+  // allowing GET from https://erictliu.com (the ring needs a readable body
+  // and Content-Length), then put its https URL here - the viewer only
+  // accepts *.r2.dev, *.r2.cloudflarestorage.com and erictliu.com hosts.
+  static WORLD = '';
   openDoor() {
     if (this.door) return;
     const en = document.getElementById('kEnter'); if (!en) return;
@@ -495,7 +502,7 @@ class Component extends DCLogic {
     addEventListener('message', this.onDoorMsg);
     this.onDoorKey = (ev) => { if (ev.key === 'Escape') this.closeDoor(); };
     addEventListener('keydown', this.onDoorKey);
-    frame.src = './isola/?embed=1';
+    frame.src = './isola/?embed=1' + (this.constructor.WORLD ? '&world=' + encodeURIComponent(this.constructor.WORLD) : '');
     setTimeout(() => { if (!heard && !opened && this.door === d) fail('no answer from the island'); }, 20000);
   }
 

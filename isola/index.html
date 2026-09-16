@@ -1711,8 +1711,21 @@ const loader = new GLTFLoader().setDRACOLoader(draco).setMeshoptDecoder(MeshoptD
 // (dev: ?cb=<anything> also busts the world file's cache, so a swapped
 // island_world.glb loads without a BUILD bump)
 const GLB_CB = DEV && new URLSearchParams(location.search).get('cb');
-const GLB_URL = './island_world.glb?v=' + BUILD + '-flat4' + (GLB_CB ? '&cb=' + encodeURIComponent(GLB_CB) : '');
+// V238 - THE WORLD OFF THE SITE. ?world=<https URL> names a copy of the world
+// file hosted elsewhere (Cloudflare R2 with a CORS rule for the site, see
+// docs/PERF-2026-09-15.md); the door passes it through and downloads it with
+// the same progress ring. Hosts are allow-listed so a shared link cannot
+// point the viewer at an arbitrary file. Anything else: the file beside
+// this page, as always.
+const WORLD_HOSTS = ['erictliu.com', 'r2.dev', 'r2.cloudflarestorage.com', 'objects.githubusercontent.com'];
+const WORLD_URL = (() => {
+  const w = new URLSearchParams(location.search).get('world'); if (!w) return null;
+  try { const u = new URL(w); if (u.protocol === 'https:' && WORLD_HOSTS.some(h => u.hostname === h || u.hostname.endsWith('.' + h))) return u.href; } catch (e) {}
+  console.warn('world: ignoring ' + w + ' (host not allowed)'); return null;
+})();
+const GLB_URL = WORLD_URL || './island_world.glb?v=' + BUILD + '-flat4' + (GLB_CB ? '&cb=' + encodeURIComponent(GLB_CB) : '');
 const GLB_ABS = new URL(GLB_URL, location.href).href;
+window.WORLD_URL = WORLD_URL;
 if (EMBED) {
   // the door downloads the world with a progress bar and puts it in the
   // Cache API under GLB_ABS, then says go; if nothing answers (an older
