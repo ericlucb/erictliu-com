@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <title>Isola Quieta — live world</title>
-<link rel="modulepreload" href="./dist/main.js?v=v268">
+<link rel="modulepreload" href="./dist/main.js?v=v269">
 <style>
   html, body { margin: 0; height: 100%; overflow: hidden; background: #5d5f7e; }
   #app { position: fixed; inset: 0; }
@@ -29,12 +29,12 @@
   .move-keys kbd:first-child { grid-column: 2; }
   .move-keys kbd:nth-child(2) { grid-column: 1; }
   .move-keys kbd.held { background: rgba(244,239,227,.36); }
-  /* A TIP, ONCE: on a phone held upright, a quiet line near the top - a little phone that
-     turns once, 'tip: turn sideways' - fades in, stays a few seconds, and goes. It shows
-     once per visit; the moment the phone goes sideways it is gone anyway. */
-  #turn { position: fixed; left: 50%; top: calc(12% + env(safe-area-inset-top, 0px)); transform: translateX(-50%);
-    display: none; align-items: center; gap: 8px; color: #f4efe3; font: 11px/1 -apple-system, "SF Pro Text", sans-serif;
-    letter-spacing: .12em; text-transform: uppercase; z-index: 30; pointer-events: none; text-shadow: 0 1px 5px rgba(20,20,40,.45);
+  /* A TIP, ONCE: on a phone held upright, a quiet line under 'drag to look' - a little phone
+     that turns once, 'tip: turn sideways' - fades in, stays a few seconds, and goes. It shows
+     once per visit; the moment the phone goes sideways it is gone anyway. It lives inside the
+     HUD so the two hints read as one block. */
+  #turn { display: none; align-items: center; gap: 8px; color: #f4efe3; font: 11px/1 -apple-system, "SF Pro Text", sans-serif;
+    letter-spacing: .12em; text-transform: uppercase; pointer-events: none; text-shadow: 0 1px 5px rgba(20,20,40,.45);
     opacity: 0; animation: tip-fade 7s ease forwards; }
   #turn svg { width: 18px; height: 18px; flex: none; animation: turn-phone 1.6s cubic-bezier(.5,.02,.18,1) .9s 1 both; transform-origin: 50% 50%; }
   body.touch.ready #turn { display: flex; }   /* (body.ready: the world is in view) */
@@ -67,9 +67,14 @@
   #stick.live .knob { transition: none; background: rgba(244,239,227,.8); }
   #stick .lbl { position: absolute; left: 0; right: 0; bottom: -20px; text-align: center; color: #f4efe3;
     font: 11px/1 -apple-system, "SF Pro Text", sans-serif; letter-spacing: .08em; text-shadow: 0 1px 4px rgba(20,20,40,.4); }
-  body.touch #hud { left: 50%; top: 42%; }   /* in the sky above the island, not over it */
+  /* a phone: one quiet block at the top of the sky - the look hint with the sideways tip under it -
+     and the stick at the bottom-left; nothing over the island */
+  body.touch #hud { left: 50%; top: calc(7% + env(safe-area-inset-top, 0px)); transform: translate(-50%, 0); align-items: center; gap: 10px; }
+  body.touch #hud.used { transform: translate(-50%, 0) translateY(-4px); }
   body.touch .row-move { display: none; }   /* a finger drags to look and moves with the stick */
+  body.touch .look-gesture { width: auto; }
   body.touch .look-gesture .mouse { display: none; }   /* the arrows stay, the mouse glyph goes */
+  body.touch .look-gesture svg { width: 44px; height: 22px; }
   #fps {
     display: none;
     position: fixed; right: 14px; top: 12px; color: #efe9dc;
@@ -126,8 +131,8 @@
       <path d="M17 16H4m4-4-4 4 4 4m39-4h13m-4-4 4 4-4 4"/>
     </svg>
   </span><span>drag to look</span></span>
+  <div id="turn" role="status"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2.2"/><path d="M11 18.5h2"/></svg><span>tip: turn sideways</span></div>
 </div>
-<div id="turn" role="status"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2.2"/><path d="M11 18.5h2"/></svg><span>tip: turn sideways</span></div>
 <div id="fps"></div>
 <div id="stick" aria-label="Move stick"><div class="base"></div><div class="knob"></div><div class="lbl">move</div></div>
 <!-- the LOOK panel (?dev=1) is built by src/dev-panel.js; its styles are .hud-panel above -->
@@ -138,8 +143,8 @@
 // line and main.js's BUILD in step); ?cb=<x> busts it while developing
 const q = new URLSearchParams(location.search);
 // the height grids leave with the program, not after it (a <link preload> did this in Chrome; WebKit fetched them twice)
-window.GRIDS_FETCH = fetch('./world-grids.bin?v=v268');
-import((q.has('src') ? './src/main.js' : './dist/main.js') + '?v=v268' + (q.get('cb') ? '&cb=' + encodeURIComponent(q.get('cb')) : ''));
+window.GRIDS_FETCH = fetch('./world-grids.bin?v=v269');
+import((q.has('src') ? './src/main.js' : './dist/main.js') + '?v=v269' + (q.get('cb') ? '&cb=' + encodeURIComponent(q.get('cb')) : ''));
 </script>
 </body>
 </html>
