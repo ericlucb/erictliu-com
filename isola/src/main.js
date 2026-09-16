@@ -39,7 +39,7 @@ import { installStats } from './stats.js';
 
 // cache-buster: one label per build, so a reload re-uses the cached 117 MB
 // GLB instead of fetching it again (v115 stamped the clock on every load)
-const BUILD = 'v249';
+const BUILD = 'v250';
 // V242: the world's parse finishes in ~200 ms now (meshopt), sooner than
 // this module finishes evaluating - it suspends on later top-level awaits -
 // so the load callback must wait for the module's last line, or it reads
@@ -2589,7 +2589,7 @@ if (worldBuf) loader.parse(worldBuf, './', async (gltf) => {
   window.CAM = camera; window.CTRL = controls;
   window.PHYS = { Wind, Grass, Tree, Cloth };
   // live sun is the default mode - apply it once the world exists
-  $('c-light').dispatchEvent(new Event('change'));
+  setLiveLight(true);                    // the live sun is the default; the dev panel's select switches it
   T_LOAD.halve0 = performance.now();
   if (MEMORY_TIER) halveTextures(scene, EXTRA_TEXTURES, 1024);   // V245: a phone's screen resolves no more; the house's 1024x1536 sheets go to 512x768
   T_LOAD.halve = performance.now();
@@ -2931,188 +2931,11 @@ function sizePost() {
 sizePost();
 addEventListener('resize', sizePost);
 
-// ---- look panel ----------------------------------------------------
-const $ = (id) => document.getElementById(id);
-function bindRange(id, out, apply, digits = 2) {
-  const el = $(id);
-  el.addEventListener('input', () => {
-    $(out).textContent = (+el.value).toFixed(digits);
-    apply(+el.value);
-  });
-}
-bindRange('c-mix', 'o-mix', v => postMat.uniforms.uMix.value = v);
-bindRange('c-rad', 'o-rad', v => postMat.uniforms.uRadius.value = v, 0);
-bindRange('c-edge', 'o-edge', v => postMat.uniforms.uEdge.value = v);
-bindRange('c-grain', 'o-grain', v => postMat.uniforms.uGrain.value = v);
-bindRange('c-sat', 'o-sat', v => postMat.uniforms.uSat.value = v);
-bindRange('c-cel', 'o-cel', v => postMat.uniforms.uCel.value = v);
-bindRange('c-sepia', 'o-sepia', v => postMat.uniforms.uSepia.value = v);
-$('c-wind').addEventListener('change', () => WIND.on = $('c-wind').checked);
-// reduced motion (ported from the Codex pass): the meadow, tree, cloth and
-// water all move with the wind - a visitor who asked for less motion gets it off
-if (matchMedia('(prefers-reduced-motion: reduce)').matches) { WIND.on = false; $('c-wind').checked = false; }
-bindRange('c-wspd', 'o-wspd', v => Wind.mean = v, 1);
-bindRange('c-sun', 'o-sun', v => placeSun(v));
-bindRange('c-hz', 'o-hz', v => { HORIZON.shift = v; applyHorizon(); }, 3);
-bindRange('c-hcone', 'o-hcone', v => scene.heroCone = v, 0);
-bindRange('c-hnear', 'o-hnear', v => scene.heroNear = v);
-$('c-cam').addEventListener('change', () => setCamMode($('c-cam').value));
-$('c-shore').addEventListener('click', () => {
-  setCamMode('fly');
-  const target = new THREE.Vector3(-7.5, .25, -21.1);
-  const eye = new THREE.Vector3(-13.5, 4.8, -31.0).sub(target)
-    .multiplyScalar(Math.max(1, .9 / camera.aspect)).add(target);
-  window.LOOKAT(...eye.toArray(), ...target.toArray());
-});
-$('c-hero').addEventListener('click', restoreHero);
-$('c-house').addEventListener('click', () => {
-  setCamMode('fly'); camera.clearViewOffset();
-  const target = new THREE.Vector3(1.5126, 4.4430, -1.6429);
-  const eye = new THREE.Vector3(10.0855, 4.9430, 6.8075).sub(target)
-    .multiplyScalar(Math.max(1, 1.5 / camera.aspect)).add(target);
-  eye.y+=HOME_DROP; target.y+=HOME_DROP;
-  window.LOOKAT(...eye.toArray(), ...target.toArray());
-});
-$('c-rear').addEventListener('click', () => {
-  setCamMode('fly'); camera.clearViewOffset();
-  const target = new THREE.Vector3(-5.0129, 5.7930, -7.1303);
-  const eye = new THREE.Vector3(-25.8342, 8.8930, -18.1064).sub(target)
-    .multiplyScalar(Math.max(1, 1.5 / camera.aspect)).add(target);
-  eye.y+=HOME_DROP; target.y+=HOME_DROP;
-  window.LOOKAT(...eye.toArray(), ...target.toArray());
-});
-if (DEV) {   // the review cameras below feed the dev panel only (V244: not fetched for visitors)
-const rearRemodelCameras = await fetch('./rear-remodel-cameras.json?v='+BUILD).then(r=>r.json());
-for(const v of Object.values(rearRemodelCameras))for(const k of ['eye','target'])v[k][1]+=HOME_DROP;
-for (const [id,key] of [['c-chimney','chimney'],['c-chimney-back','chimney_reverse'],['c-rear-detail','rear_detail']]) {
-  $(id).addEventListener('click',()=>{
-    setCamMode('fly'); camera.clearViewOffset(); camera.fov=50; camera.updateProjectionMatrix();
-    const c=rearRemodelCameras[key],target=new THREE.Vector3(...c.target);
-    const eye=new THREE.Vector3(...c.eye).sub(target).multiplyScalar(Math.max(1,.9/camera.aspect)).add(target);
-    window.LOOKAT(...eye.toArray(),...target.toArray());
-  });
-}
-$('c-gable').addEventListener('click', () => {
-  setCamMode('fly'); camera.clearViewOffset();
-  const target = new THREE.Vector3(2.4011, 5.7930, -9.3231);
-  const eye = new THREE.Vector3(14.2643, 8.4930, -28.0919).sub(target)
-    .multiplyScalar(Math.max(1, 1.5 / camera.aspect)).add(target);
-  eye.y+=HOME_DROP; target.y+=HOME_DROP;
-  window.LOOKAT(...eye.toArray(), ...target.toArray());
-});
-$('c-pier').addEventListener('click', () => {
-  setCamMode('fly'); camera.clearViewOffset();
-  const target = new THREE.Vector3(-7.8551, .2, -19.7783);
-  const eye = new THREE.Vector3(-13.3603, 1.05, -24.1752).sub(target)
-    .multiplyScalar(Math.max(1, 1.35 / camera.aspect)).add(target);
-  window.LOOKAT(...eye.toArray(), ...target.toArray());
-});
-$('c-path').addEventListener('click', () => {
-  setCamMode('fly'); camera.clearViewOffset();
-  const target = new THREE.Vector3(-5.8992, 2.5430, -8.8731);
-  const eye = new THREE.Vector3(-9.8791, 3.8930, -12.2198).sub(target)
-    .multiplyScalar(Math.max(1, 1.2 / camera.aspect)).add(target);
-  eye.y+=HOME_DROP; target.y+=HOME_DROP;
-  window.LOOKAT(...eye.toArray(), ...target.toArray());
-});
-$('c-flowers').addEventListener('click', () => {
-  setCamMode('fly'); camera.clearViewOffset(); camera.fov=FLY.fov0=50; camera.updateProjectionMatrix();
-  // Focus an actual retained meadow plant, clear of the doorway wear mask.
-  const target = new THREE.Vector3(16.0026,1.64,2.9909);
-  const eye = new THREE.Vector3(16.4526,2.02,4.0409).sub(target)
-    .multiplyScalar(Math.max(1, 1.2 / camera.aspect)).add(target);
-  eye.y=Math.max(eye.y,groundY(eye.x,eye.z)+COLLIDE.eye+.02);
-  window.LOOKAT(...eye.toArray(), ...target.toArray());
-});
-const entryCamera = await fetch('./front-approach-camera.json').then(r=>r.json());
-for(const v of [entryCamera])for(const k of ['eye','target'])v[k][1]+=HOME_DROP;
-$('c-entry').addEventListener('click',()=>{
- setCamMode('fly'); camera.clearViewOffset(); camera.fov=FLY.fov0=50; camera.updateProjectionMatrix();
- const target=new THREE.Vector3(...entryCamera.target);
- const eye=new THREE.Vector3(...entryCamera.eye).sub(target).multiplyScalar(Math.max(1,1.15/camera.aspect)).add(target);
- window.LOOKAT(...eye.toArray(),...target.toArray());
-});
-for (const [state,v] of Object.entries(windowVariants.views)) {
-  const option=document.createElement('option'); option.value=state; option.textContent=v.label;
-  $('c-window-variant').appendChild(option);
-}
-$('c-window-variant').addEventListener('change',()=>{
-  const v=windowVariants.views[$('c-window-variant').value]; if(!v)return;
-  setCamMode('fly'); camera.clearViewOffset(); camera.fov=FLY.fov0=v.fov; camera.updateProjectionMatrix();
-  const eye=[...v.eye]; eye[1]=Math.max(eye[1],groundY(eye[0],eye[2])+COLLIDE.eye+.05);
-  window.LOOKAT(...eye,...v.target);
-});
-const joineryCameras = await fetch('./joinery-cameras.json').then(r => r.json());
-for(const v of Object.values(joineryCameras))for(const k of ['eye','target'])v[k][1]+=HOME_DROP;
-$('c-eave').addEventListener('click',()=>{
- setCamMode('fly');camera.clearViewOffset();camera.fov=FLY.fov0=50;camera.updateProjectionMatrix();
- const v=joineryCameras.window_angle;
- window.LOOKAT(v.eye[0]+.8,v.eye[1]+1.15,v.eye[2]+1.3,v.target[0],v.target[1]+1.15,v.target[2]);
-});
-
-for (const name of ['window_detail','window_angle','door_detail']) {
-  $('c-'+name.replace('_','-')).addEventListener('click', () => {
-    const v=joineryCameras[name]; setCamMode('fly'); camera.clearViewOffset();
-    camera.fov=FLY.fov0=v.fov; camera.updateProjectionMatrix();
-    const eye=[...v.eye]; eye[1]=Math.max(eye[1],groundY(eye[0],eye[2])+COLLIDE.eye+.05);
-    window.LOOKAT(...eye,...v.target);
-  });
-}
-const reviewCameras = await fetch('./review-cameras.json?v='+BUILD).then(r => r.json());
-$('c-review').addEventListener('change', () => {
-  const name = $('c-review').value;
-  if (name === 'hero_camera') { restoreHero(); return; }
-  if (name === 'tree_reference') {
-    setCamMode('fly'); camera.clearViewOffset();
-    camera.fov = FLY.fov0 = THREE.MathUtils.radToDeg(2 * Math.atan(24.1758 / 240));
-    camera.updateProjectionMatrix();
-    window.LOOKAT(23.940, 8.462, 116.774, 28.936, 8.462, -3.122); return;
-  }
-  const view = reviewCameras[name]; if (!view) return;
-  setCamMode('fly'); camera.clearViewOffset();
-  camera.fov = FLY.fov0 = THREE.MathUtils.radToDeg(2 * Math.atan(36 / (2 * view.lens * camera.aspect)));
-  camera.updateProjectionMatrix();
-  window.LOOKAT(...view.eye, ...view.target);
-});
-}
-$('c-plaster').addEventListener('click',()=>{setCamMode('fly');camera.clearViewOffset();camera.fov=FLY.fov0=50;camera.updateProjectionMatrix();window.LOOKAT(11.65,5.15,-6.06,5.665,3.64,-6.579);});
-$('c-bench').addEventListener('click',()=>{setCamMode('fly');camera.clearViewOffset();camera.fov=FLY.fov0=50;camera.updateProjectionMatrix();window.LOOKAT(17.0,4.0,5.2,23.42,2.2,3.25);});
-$('c-tree').addEventListener('click', () => {
-  setCamMode('fly');
-  const target = new THREE.Vector3(30, 8, -.5);
-  const eye = new THREE.Vector3(26, 10.5, 32).sub(target)
-    .multiplyScalar(Math.max(1, .8 / camera.aspect)).add(target);
-  eye.y+=TERRAIN_PROFILE.offsets.WEB_HM_tree_og; target.y+=TERRAIN_PROFILE.offsets.WEB_HM_tree_og;
-  window.LOOKAT(...eye.toArray(), ...target.toArray());
-});
-$('c-laundry').addEventListener('click', () => {
-  setCamMode('fly'); camera.clearViewOffset();
-  const target=new THREE.Vector3(11.5,3.25,-7.7);
-  const eye=new THREE.Vector3(10.5,3.7,1.2).sub(target)
-    .multiplyScalar(Math.max(1,1.3/camera.aspect)).add(target);
-  eye.y+=TERRAIN_PROFILE.offsets.WEB_HM_clothes_line; target.y+=TERRAIN_PROFILE.offsets.WEB_HM_clothes_line;
-  window.LOOKAT(...eye.toArray(),...target.toArray());
-});
-$('c-tree-side').addEventListener('click', () => {
-  setCamMode('fly'); camera.clearViewOffset(); camera.fov=FLY.fov0=50; camera.updateProjectionMatrix();
-  const target=new THREE.Vector3(31,9.8,-3);
-  const eye=new THREE.Vector3(51,11,-2).sub(target).multiplyScalar(Math.max(1,.80/camera.aspect)).add(target);
-  eye.y+=TERRAIN_PROFILE.offsets.WEB_HM_tree_og; target.y+=TERRAIN_PROFILE.offsets.WEB_HM_tree_og;
-  window.LOOKAT(...eye.toArray(),...target.toArray());
-});
-$('c-twigs').addEventListener('click', () => {
-  setCamMode('fly'); camera.clearViewOffset(); camera.fov=FLY.fov0=50; camera.updateProjectionMatrix();
-  window.LOOKAT(29.2,12.6,3.8,30.5,12.5,-.6);
-});
-$('c-bark').addEventListener('click', () => {
-  setCamMode('fly'); window.LOOKAT(25.5, 5, 8.5, 29.2, 4.5, -2.3);
-});
-$('c-leaves').addEventListener('click', () => {
-  setCamMode('fly'); window.LOOKAT(27, 13, 9, 31, 13, -.5);
-});
+// reduced motion: the meadow, tree, cloth and water all move with the wind -
+// a visitor who asked for less motion gets it off
+if (matchMedia('(prefers-reduced-motion: reduce)').matches) WIND.on = false;
 restoreDefault();                     // the first frame: the painting's direction, pulled back (V207)
-// the two visitor sliders drive the same bindings as the dev panel's
-$('c-on').addEventListener('change', () => painterly = $('c-on').checked);
+function setPainterly(on) { painterly = on; }
 // Painted pigments share one moving sun and shadow map. Turning live light
 // off restores the authored reference direction without material swapping.
 const sunRig = new THREE.Group();
@@ -3149,18 +2972,20 @@ function placeSun(t) {
   OIL_SUN.value.copy(d).negate();
   SUN.light.position.copy(d.multiplyScalar(-420)).add(SUN.light.target.position);
 }
-$('c-sun-view').addEventListener('click',()=>{
-  setCamMode('fly');camera.clearViewOffset();camera.fov=FLY.fov0=40;camera.updateProjectionMatrix();
-  const eye=camera.position.clone(),target=eye.clone().addScaledVector(VISIBLE_SUN.value,100);
-  window.LOOKAT(...eye.toArray(),...target.toArray());
-});
-$('c-light').addEventListener('change', () => {
-  const live = $('c-light').value === 'sun';
-  PLASTER_LIVE.value=live?1:0;
-  VISIBLE_SUN_ON.value=live?1:0;
-  // Every painted material shares live uniforms; no emissive Lambert clone.
+// live sun (the default) or the painting's baked light: every painted
+// material shares the live uniforms; no emissive Lambert clone
+function setLiveLight(live) {
+  PLASTER_LIVE.value = live ? 1 : 0;
+  VISIBLE_SUN_ON.value = live ? 1 : 0;
   if (live) scene.add(sunRig); else scene.remove(sunRig);
-});
+}
+// the LOOK panel (cameras, review views, wind, sun, painterly dials) only
+// with ?dev=1 - a dynamic import, so a visitor's bundle never carries it
+if (DEV) {
+  const { installDevPanel } = await import('./dev-panel.js');
+  await installDevPanel({ Vector3: THREE.Vector3, MathUtils: THREE.MathUtils, camera, FLY, setCamMode, restoreHero, LOOKAT: window.LOOKAT, HOME_DROP, postMat, Wind, WIND, placeSun, HORIZON, applyHorizon, scene, COLLIDE, groundY,
+                          windowVariants, TERRAIN_PROFILE, setPainterly, setLiveLight, VISIBLE_SUN, BUILD });
+}
 
 const fpsEl = document.getElementById('fps');
 let fpsFrames = 0, fpsT0 = performance.now();
