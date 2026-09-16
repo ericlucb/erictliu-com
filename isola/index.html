@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <title>Isola Quieta — live world</title>
-<link rel="modulepreload" href="./dist/main.js?v=v276">
+<link rel="modulepreload" href="./dist/main.js?v=v277">
 <style>
   html, body { margin: 0; height: 100%; overflow: hidden; background: #5d5f7e; }
   #app { position: fixed; inset: 0; }
@@ -35,13 +35,13 @@
      HUD so the two hints read as one block. */
   #turn { display: none; align-items: center; gap: 8px; color: #f4efe3; font: 11px/1 -apple-system, "SF Pro Text", sans-serif;
     letter-spacing: .12em; text-transform: uppercase; pointer-events: none; text-shadow: 0 1px 5px rgba(20,20,40,.45);
-    opacity: 0; animation: tip-fade 7s ease forwards; }
+    opacity: 0; animation: tip-fade 1.2s ease forwards; }   /* fades in and stays: the tip shows whenever the phone is upright */
   #turn svg { width: 18px; height: 18px; flex: none; animation: turn-phone 1.6s cubic-bezier(.5,.02,.18,1) .9s 1 both; transform-origin: 50% 50%; }
   body.touch.ready #turn { display: flex; }   /* (body.ready: the world is in view) */
   body.touch #turn.gone { display: none; }
   @media (orientation: landscape) { #turn { display: none !important; } }
   @keyframes turn-phone { from { transform: rotate(0deg); } to { transform: rotate(-90deg); } }
-  @keyframes tip-fade { 0% { opacity: 0; } 8% { opacity: .82; } 80% { opacity: .82; } 100% { opacity: 0; } }
+  @keyframes tip-fade { 0% { opacity: 0; } 100% { opacity: .82; } }
   @media (prefers-reduced-motion: reduce) { #turn svg { animation: none; transform: rotate(-90deg); } #turn { animation-duration: 4s; } }
   /* the look is a drag: the cursor is a hand over the world, a closed one while it drags */
   #app canvas { cursor: grab; }
@@ -69,11 +69,12 @@
     font: 11px/1 -apple-system, "SF Pro Text", sans-serif; letter-spacing: .08em; text-shadow: 0 1px 4px rgba(20,20,40,.4); }
   /* a phone: the stick at the bottom-left, the look hint at the bottom-right in the stick label's own
      type (the sideways tip a line above it, once); the sky and the island stay clear */
-  body.touch #hud { left: auto; top: auto; right: calc(40px + env(safe-area-inset-right, 0px)); bottom: calc(74px + env(safe-area-inset-bottom, 0px));
+  body.touch #hud { left: auto; top: auto; right: calc(64px + env(safe-area-inset-right, 0px)); bottom: calc(74px + env(safe-area-inset-bottom, 0px));
     transform: none; flex-direction: column-reverse; align-items: flex-end; gap: 12px;   /* the look hint level with the stick's centre (24px up, a 112px stick, a 20px row) */
     font: 11px/1 -apple-system, "SF Pro Text", sans-serif; letter-spacing: .08em; text-shadow: 0 1px 4px rgba(20,20,40,.4); }
   body.touch #turn { position: fixed; left: 50%; right: auto; top: calc(9% + env(safe-area-inset-top, 0px)); transform: translateX(-50%); }   /* the tip up in the sky, where the clouds are */
-  body.touch #hud.used { transform: translateY(4px); }
+  body.touch #hud.used { transform: translateY(4px); opacity: 1; }   /* on a phone only the look hint fades once used; the tip stays */
+  body.touch #hud.used .row-look { opacity: 0; transition: opacity 1.4s ease; }
   body.touch #hud.used #turn { transform: translateX(-50%); }
   body.touch .row-move { display: none; }   /* a finger drags to look and moves with the stick */
   body.touch .row-look { gap: 9px; }
@@ -148,8 +149,8 @@
 // line and main.js's BUILD in step); ?cb=<x> busts it while developing
 const q = new URLSearchParams(location.search);
 // the height grids leave with the program, not after it (a <link preload> did this in Chrome; WebKit fetched them twice)
-window.GRIDS_FETCH = fetch('./world-grids.bin?v=v276');
-import((q.has('src') ? './src/main.js' : './dist/main.js') + '?v=v276' + (q.get('cb') ? '&cb=' + encodeURIComponent(q.get('cb')) : ''));
+window.GRIDS_FETCH = fetch('./world-grids.bin?v=v277');
+import((q.has('src') ? './src/main.js' : './dist/main.js') + '?v=v277' + (q.get('cb') ? '&cb=' + encodeURIComponent(q.get('cb')) : ''));
 </script>
 </body>
 </html>
