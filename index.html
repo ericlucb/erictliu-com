@@ -99,7 +99,7 @@
     /* The face takes the screen: the drawing is wider than the phone (its stage has
        air either side of the head), so the svg runs past the edges and the chin sits
        about halfway down; the icon row hangs just under it. */
-    #kStage { --facetop:calc(var(--vph) * 0.16); --facew:min(205vw, calc(var(--vph) * 0.98)); --paneltop:min(calc(var(--facetop) + var(--facew) * var(--pk, 1) * 0.57 + 6px), calc(var(--vph) - 44px)); }
+    #kStage { --facetop:calc(var(--vph) * 0.5075 - 10px - var(--facew) * var(--pk, 1) * 0.34); --facew:min(205vw, calc(var(--vph) * 0.98)); --paneltop:min(calc(var(--facetop) + var(--facew) * var(--pk, 1) * 0.57 + 6px), calc(var(--vph) - 44px)); }   /* the head and the icon row centred between the copy and the door */
     /* DRAW's bar sits along the bottom here too (draw.js no longer picks the left side in
        portrait); its compact scale is for a 700px phone, a 375px one needs it smaller still */
     .kDrawCompact[data-place="bottom"] .Draw_toolbar { transform:scale(.72) !important; transform-origin:0% 100% !important; left:8px !important; translate:0 0 !important; bottom:56px !important; }   /* (the bundle centres it with left:50% translate:-50% in unscaled pixels) */
@@ -120,7 +120,8 @@
     #kPanel { left:50% !important; right:auto !important; bottom:auto !important; top:var(--paneltop) !important; transform:translateX(-50%) !important; }
     /* Run the open panel to the bottom edge — covering the label is fine, and
        it means the controls fit without scrolling. */
-    #kPanelB { width:min(336px, 92vw) !important; max-height:calc(var(--vph) - var(--paneltop) - 50px) !important; }
+    #kPanelB { width:min(336px, 92vw) !important; max-height:calc(var(--vph) - var(--paneltop) - 56px) !important; }
+    body.kPanelOpen #kNav { display:none !important; }   /* the body has the bottom while it is open */
     #kCols { grid-template-columns:1fr 1fr !important; gap:12px 16px !important; }
     /* Swatches drop to a second row here, so lay INK and BACKGROUND side by side. */
     #kCols > div:nth-child(3) { grid-column:1 / -1 !important; }
@@ -129,7 +130,7 @@
 
   /* Short phones: sit the face higher so the open panel still clears. */
   @media (max-width: 880px) and (orientation: portrait) and (max-height: 680px) {
-    #kStage { --facetop:calc(var(--vph) * 0.12); --facew:min(205vw, calc(var(--vph) * 0.9)); }
+    #kStage { --facew:min(205vw, calc(var(--vph) * 0.9)); }
     #kCopy { top:calc(var(--vph) * 0.035) !important; }
   }
 
@@ -812,13 +813,19 @@ class Component extends DCLogic {
         cols.style.gridTemplateColumns = 'repeat(auto-fit, minmax(0, 152px))';
         inner.forEach(c => { c.style.display = 'contents'; });
       };
-      if (!open) { stage.style.setProperty('--pk', '1'); return; }
+      document.body.classList.toggle('kPanelOpen', !!open);
+      if (!open) { stage.style.setProperty('--pk', '1'); stage.style.removeProperty('--facetop'); return; }
       const vw = innerWidth, vh = innerHeight, mob = matchMedia('(max-width: 880px)').matches;
       stage.style.setProperty('--pk', '1');
+      // a phone: the face comes up under the links while the panel is open, so a shrink closes the gap
+      // above the head instead of opening one (the CSS's resting --facetop returns when it closes)
+      // (the drawing has air above the head, 0.11 of the box's width: the box goes up by that much, scaled with the shrink)
+      const copyEl = document.getElementById('kCopy'), copyB = mob && copyEl ? copyEl.getBoundingClientRect().bottom + 8 : 0;
+      if (mob) stage.style.setProperty('--facetop', 'calc(' + Math.round(copyB) + 'px - var(--facew) * var(--pk, 1) * 0.11)');
       requestAnimationFrame(() => {
         const pwNat = svg.getBoundingClientRect().width / (parseFloat(stage.style.getPropertyValue('--pk')) || 1);
         const labelH = (h ? h.getBoundingClientRect().height : 34) + 9;
-        const slope = mob ? 0.57 : 0.215, base = mob ? 0.16 * vh + 6 : 0.5 * vh;   // (mob: --facetop and --paneltop's factor, above)
+        const slope = mob ? 0.46 : 0.215, base = mob ? copyB + 6 : 0.5 * vh;   // (mob: the open --facetop's -0.11 and --paneltop's 0.57 of the box, together)
         const roomAt = (k) => vh - 14 - labelH - (base + pwNat * k * slope);
         const room = roomAt(1);
         // keep the head its natural size: try tall, then wide, then wider, and only then scroll
