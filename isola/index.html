@@ -132,7 +132,7 @@ import { bakeWorldTransform } from './bake-world-transform.js';
 
 // cache-buster: one label per build, so a reload re-uses the cached 117 MB
 // GLB instead of fetching it again (v115 stamped the clock on every load)
-const BUILD = 'v233';
+const BUILD = 'v234';
 // ?dev=1 shows the full LOOK panel (cameras, review views, painterly dials);
 // visitors get only the settings control (V207)
 const DEV = new URLSearchParams(location.search).has('dev');
@@ -229,7 +229,7 @@ const plasterColor = await fetch('./plaster-color.json?v='+BUILD).then(r=>r.json
 const PLASTER_LIVE = {value:1};
 const windowVariants = await fetch('./window-variants.json?v='+BUILD).then(r=>r.json());
 for(const v of Object.values(windowVariants.views))for(const k of ['eye','target'])v[k][1]+=HOME_DROP;
-const ROOM_PAINT={value:new THREE.TextureLoader().load('./interior-warm-v1.png?v='+BUILD)};
+const ROOM_PAINT={value:new THREE.TextureLoader().load('./interior-warm-v1.webp?v='+BUILD)};
 ROOM_PAINT.value.colorSpace=THREE.SRGBColorSpace;
 // dusk gradient dome + the painting's own sky panorama on a band
 {
@@ -1067,7 +1067,7 @@ const WIND_GLSL = `
   // Crysis (GPU Gems 3 ch.16) smoothed triangle wave, for leaf flutter
   float stw(float x){ float t = abs(fract(x + 0.5) * 2.0 - 1.0); return t * t * (3.0 - 2.0 * t); }
 `;
-function windify(material, kind, hasHeight = false, scl = [1, 1, 1], hasPhase = false, hasRoot = false) {
+function windify(material, kind, hasHeight = false, scl = [1, 1, 1], hasPhase = false, hasRoot = false, rootRel = false) {
   const [SX, SY, SZ] = scl.map(v => v.toFixed(4));
   material.onBeforeCompile = (sh) => {
     sh.uniforms.uWt = WIND.t;
@@ -1100,7 +1100,14 @@ function windify(material, kind, hasHeight = false, scl = [1, 1, 1], hasPhase = 
       // the exporter's per-BLADE random (constant along one blade)
       sh.vertexShader = '#define HAS_PHASE\nattribute float _phase;\n' + sh.vertexShader;
     }
-    if (kind === 'blade' && hasRoot) {
+    if (kind === 'blade' && hasRoot && rootRel) {
+      // V234: the repacked meadow - POSITION is relative to the blade's root
+      // (int16 over the node's scale), the world root is _root3 (expanded
+      // from the blade table at load); _root, as the LOD reads it, is its xz
+      sh.vertexShader = '#define HAS_ROOT\n#define ROOT_REL\nattribute vec3 _root3;\n#define _root (_root3.xz)\n' + sh.vertexShader;
+      // the repack ships _height as a (hf, 0) uint16 pair - see optimize_glb.py
+      sh.vertexShader = sh.vertexShader.replace('attribute float _height;', 'attribute vec4 _height4;\n#define _height (_height4.x)');
+    } else if (kind === 'blade' && hasRoot) {
       // V218: the blade's root (world xz), written by scripts/optimize_glb.py
       sh.vertexShader = '#define HAS_ROOT\nattribute vec2 _root;\n' + sh.vertexShader;
     }
@@ -1153,7 +1160,10 @@ function windify(material, kind, hasHeight = false, scl = [1, 1, 1], hasPhase = 
       '#include <begin_vertex>',
       `#include <begin_vertex>
       {
-        vec3 wpos = (modelMatrix * vec4(position, 1.0)).xyz;
+        #ifdef ROOT_REL
+        transformed += _root3 / vec3(${SX}, ${SY}, ${SZ});   // V234: root-relative position -> the blade's place (local units)
+        #endif
+        vec3 wpos = (modelMatrix * vec4(transformed, 1.0)).xyz;
         vEntryRest = wpos.xz;
         ${kind === 'tree'
           ? `vec3 anchor=treeAnchor(${hasHeight ? '_leaf_pivot' : 'wpos'});
@@ -1482,9 +1492,12 @@ function splitBladeChunks(o) {
     for (const [k, a] of Object.entries(g0.attributes)) g.setAttribute(k, a);
     g.setIndex(new THREE.BufferAttribute(ia.subarray(c.start, c.start + c.count), 1));
     // bounds from the vertices actually in this range, in the geometry's
-    // own (possibly quantized) space - the extras' bounds are pre-quantization
+    // own (possibly quantized) space - the extras' bounds are pre-quantization.
+    // V234: the repacked meadow's positions are root-relative, so its chunk
+    // bounds come from the table (world metres) scaled into the node's space
     const bb = new THREE.Box3();
-    for (let i = c.start; i < c.start + c.count; i++) bb.expandByPoint(v.fromBufferAttribute(pos, ia[i]));
+    if (g0.userData.meadowRepack && c.min && c.max) { bb.min.set(...c.min).divide(o.scale); bb.max.set(...c.max).divide(o.scale); }
+    else for (let i = c.start; i < c.start + c.count; i++) bb.expandByPoint(v.fromBufferAttribute(pos, ia[i]));
     g.boundingBox = bb;
     g.boundingSphere = bb.getBoundingSphere(new THREE.Sphere());
     g.userData = g0.userData;
@@ -1546,7 +1559,10 @@ const loader = new GLTFLoader().setDRACOLoader(draco).setMeshoptDecoder(MeshoptD
 // in the Cache API under this exact URL; if it is there, load it from the
 // blob and skip the second download (the HTTP cache usually hits too, but
 // GitHub Pages' max-age is only ten minutes)
-const GLB_URL = './island_world.glb?v=' + BUILD + '-flat4';
+// (dev: ?cb=<anything> also busts the world file's cache, so a swapped
+// island_world.glb loads without a BUILD bump)
+const GLB_CB = DEV && new URLSearchParams(location.search).get('cb');
+const GLB_URL = './island_world.glb?v=' + BUILD + '-flat4' + (GLB_CB ? '&cb=' + encodeURIComponent(GLB_CB) : '');
 const GLB_ABS = new URL(GLB_URL, location.href).href;
 if (EMBED) {
   // the door downloads the world with a progress bar and puts it in the
@@ -2063,6 +2079,69 @@ loader.load(glbSrc, (gltf) => {
     // physics hookup: blades are the vertex-coloured primitive, petals by
     // material name (both read the meadow field), the tree gets the modal
     // model, the laundry becomes real cloth
+    // V234: the repacked meadow (scripts/optimize_glb.py) - WEB_meadow holds
+    // every blade vertex relative to its root; WEB_meadow_table (a POINTS
+    // primitive, one record per blade) holds root, tint, phase, vertex count
+    // and triangle pattern. Expand the table per vertex, generate the index,
+    // split into the spatial chunks; the blade shader runs in ROOT_REL mode.
+    if (o.name === 'WEB_meadow' || o.parent?.name === 'WEB_meadow') {
+      const table = gltf.scene.getObjectByName('WEB_meadow_table');
+      const tg = table && (table.geometry || table.children[0]?.geometry);
+      if (!tg) { console.warn('meadow repack: no WEB_meadow_table'); return; }
+      const g = o.geometry, ex = g.userData || {};   // three puts primitive extras on the geometry
+      const patterns = ex.patterns || [];
+      const T = { root: tg.attributes.position, col: tg.attributes.color || null, ph: tg.attributes._phase, cnt: tg.attributes._count, pat: tg.attributes._pattern };
+      const hasVertexColour = !!g.attributes.color;                 // V234 final layout: the gradient ships per vertex
+      const nb = T.root.count, nv = g.attributes.position.count;
+      const t0 = performance.now();
+      // roots ship as int16 over the table node's box: world = matrixWorld * normalized
+      table.updateWorldMatrix(true, false); const TM = (table.geometry ? table : table.children[0]).matrixWorld; const rv = new THREE.Vector3();
+      const root3 = new Float32Array(nv * 3), color = hasVertexColour ? null : new Uint8Array(nv * 3), phase = new Uint16Array(nv);
+      const trisPer = patterns.map(p => p.length / 3);
+      let ntri = 0; for (let b = 0; b < nb; b++) ntri += trisPer[T.pat.getX(b)] || 0;
+      const index = new Uint32Array(ntri * 3);
+      let v = 0, k = 0;
+      const vstart = new Uint32Array(nb + 1);
+      for (let b = 0; b < nb; b++) {
+        rv.fromBufferAttribute(T.root, b).applyMatrix4(TM);
+        const c = T.cnt.getX(b), rx = rv.x, ry = rv.y, rz = rv.z;
+        // (the table's streams are stride-padded by the compressor, so three
+        // hands them over as interleaved attributes: read through getX, never
+        // the raw array; getX denormalises, so scale back to the byte / short)
+        const ph = Math.round(T.ph.getX(b) * 65535);
+        vstart[b] = v;
+        for (let j = 0; j < c; j++) { root3[(v + j) * 3] = rx; root3[(v + j) * 3 + 1] = ry; root3[(v + j) * 3 + 2] = rz; phase[v + j] = ph; }
+        if (color) { const c0 = Math.round(T.col.getX(b) * 255), c1 = Math.round(T.col.getY(b) * 255), c2 = Math.round(T.col.getZ(b) * 255); for (let j = 0; j < c; j++) { color[(v + j) * 3] = c0; color[(v + j) * 3 + 1] = c1; color[(v + j) * 3 + 2] = c2; } }
+        const pat = patterns[T.pat.getX(b)];
+        for (let j = 0; j < pat.length; j++) index[k++] = v + pat[j];
+        v += c;
+      }
+      vstart[nb] = v;
+      if (v !== nv) console.warn('meadow repack: vertex count mismatch', v, nv);
+      g.setAttribute('_root3', new THREE.BufferAttribute(root3, 3));
+      // the shader reads the padded height stream as _height4 (three binds
+      // attributes by name; an unbound one reads zero - which darkened every
+      // blade to the gradient's root tone in the first test)
+      if (g.attributes._height && !g.attributes._height4) { g.setAttribute('_height4', g.attributes._height); g.deleteAttribute('_height'); }
+      if (color) g.setAttribute('color', new THREE.BufferAttribute(color, 3, true));
+      g.setAttribute('_phase', new THREE.BufferAttribute(phase, 1, true));
+      g.setIndex(new THREE.BufferAttribute(index, 1));
+      // chunk index ranges from the table's blade ranges
+      const tex = tg.userData || {};
+      const chunks = (tex.bladeChunks || []).map(ch => { let s = 0, n = 0; for (let b = 0; b < ch.bladeStart; b++) s += trisPer[T.pat.getX(b)]; for (let b = ch.bladeStart; b < ch.bladeStart + ch.bladeCount; b++) n += trisPer[T.pat.getX(b)]; return { start: s * 3, count: n * 3, min: ch.min, max: ch.max }; });
+      g.userData.bladeChunks = chunks; g.userData.bladeRestBaked = true;
+      table.visible = false; table.traverse(c => { c.visible = false; });
+      console.info(`meadow repack: ${nb} blades, ${nv} verts, ${ntri} tris, ${patterns.length} patterns, ${chunks.length} chunks expanded in ${(performance.now() - t0).toFixed(0)} ms`);
+      o.updateWorldMatrix(true, false);
+      const sc = new THREE.Vector3(); o.matrixWorld.decompose(new THREE.Vector3(), new THREE.Quaternion(), sc);
+      mat.vertexColors = true; mat.needsUpdate = true;      // the tint comes from the table, not the primitive
+      windify(mat, 'blade', true, sc.toArray(), true, true, true);
+      splitBladeChunks(o);
+      o.userData.keepPainted = true;                          // (o.material, userData.basic and worldMeshes were set above)
+      o.userData.shadowRole = { material: m?.name, cast: false, receive: true, response: 'meadow' };
+      return;
+    }
+    if (o.name === 'WEB_meadow_table' || o.parent?.name === 'WEB_meadow_table') { o.visible = false; return; }
     // V233 (Eric: 'a weird artifact on the chimney when zoomed out that
     // disappears zoomed in'): the chimney caps (paint_17) and the flashing
     // (flashing_16) are vertex-coloured and untextured too, so they fell in
