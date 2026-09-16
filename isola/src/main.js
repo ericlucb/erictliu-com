@@ -38,7 +38,7 @@ import { installStats } from './stats.js';
 
 // cache-buster: one label per build, so a reload re-uses the cached 117 MB
 // GLB instead of fetching it again (v115 stamped the clock on every load)
-const BUILD = 'v247';
+const BUILD = 'v248';
 // V242: the world's parse finishes in ~200 ms now (meshopt), sooner than
 // this module finishes evaluating - it suspends on later top-level awaits -
 // so the load callback must wait for the module's last line, or it reads
@@ -87,7 +87,7 @@ const DOOR = EMBED ? waitForDoor(GLB_ABS, BUILD, WORLD_BYTES) : null;
 // the canvas itself (the painterly target keeps its 4x; the post quad has
 // no edges to smooth). The timed-frame ladder (V237) still runs on top.
 const MEMORY_TIER = TOUCH || Q.get('tier') === 'phone';
-if (MEMORY_TIER) window.SHADOW_FORCE = 2048;
+if (MEMORY_TIER) window.SHADOW_FORCE = 1024;   // V248: was 2048 (a 1024 map is 8 MB, not 32; a phone's screen shows the softer edge less than a monitor does)
 const renderer = new THREE.WebGLRenderer({
   antialias: Q.has('aa'),            // the painterly path resolves its own MSAA; ?aa=1 for painterly-off dev views
   preserveDrawingBuffer: Q.has('capture'),
@@ -443,9 +443,10 @@ window.restoreDefault = restoreDefault;
 // hint goes. The look drag is bound to ONE pointer id, so the stick's finger
 // and a second finger never steer it.
 const MOVE = { f: 0, r: 0 };                 // the stick: forward / right in [-1, 1]
+let TOUCH_ACTIVE = false;                    // body.touch, read every frame without a DOM query
 function enableTouch() {
   if (document.body.classList.contains('touch')) return;
-  document.body.classList.add('touch');
+  document.body.classList.add('touch'); TOUCH_ACTIVE = true;
   moveHint.setAttribute('aria-label', 'Drag to look around. Use the stick to move.');
   if (LOOK.on) setLooking(false);
 }
@@ -1010,7 +1011,7 @@ function applyDpr(v) { DPR = v; renderer.setPixelRatio(fitDpr(DPR)); renderer.se
 function tierApply(st) {
   if (st.dpr !== undefined) { if (st.dpr >= DPR) return false; applyDpr(st.dpr); }
   if (st.mirror) { if (!seaMesh) return false; seaMesh.getRenderTarget().setSize(st.mirror, st.mirror); }
-  if (st.shadow) window.SHADOW_FORCE = st.shadow;
+  if (st.shadow) window.SHADOW_FORCE = Math.min(window.SHADOW_FORCE || 4096, st.shadow);   // (never back up: the phone tier starts lower)
   TIER.applied.push(st); console.info('tier: ' + JSON.stringify(st) + ' (frame interval median over 30 ms)');
   return true;
 }
@@ -1033,8 +1034,8 @@ function markBareTwigs(root) {
   let bark = null, leaf = null;
   root.traverse(o => { if (!o.isMesh) return;
     const name = o.material?.name || '';
-    if (/IllustratedBark/.test(name) && o.geometry.attributes._sroot) bark = o;
-    else if (/IllustratedLeaf/.test(name) && o.geometry.attributes._leaf_pivot) leaf = o; });
+    if (/IllustratedBark/.test(name) && hasAttr(o.geometry, '_sroot')) bark = o;
+    else if (/IllustratedLeaf/.test(name) && hasAttr(o.geometry, '_leaf_pivot')) leaf = o; });
   if (!bark || !leaf || !CROWN.mask.value) return;
   const t0 = performance.now();
   const img = CROWN.mask.value.image;
@@ -1051,7 +1052,7 @@ function markBareTwigs(root) {
   const res = 0.25, R = 2, x0 = box.x - 1, y0 = box.y - 1, z0 = cx.y - 8;
   const nx = Math.ceil(18 / res), ny = Math.ceil(20 / res), nz = Math.ceil(16 / res);
   const occ = new Uint8Array(nx * ny * nz);
-  const P = leaf.geometry.attributes._leaf_pivot, S = leaf.geometry.attributes._leaf_seed;
+  const P = qAttr(leaf.geometry, '_leaf_pivot'), S = qAttr(leaf.geometry, '_leaf_seed');
   for (let i = 0; i < P.count; i += 3) {
     const x = P.getX(i), y = P.getY(i), z = P.getZ(i);
     const sp = spread(x, z), dx = x + sp[0], dz = z + sp[1];             // where LEAF_SHAPE draws it
@@ -1064,7 +1065,7 @@ function markBareTwigs(root) {
       occ[(jz * ny + jy) * nx + jx] = 1;
     }
   }
-  const pos = bark.geometry.attributes.position, sm = bark.geometry.attributes._smeta, n = pos.count;
+  const pos = bark.geometry.attributes.position, sm = qAttr(bark.geometry, '_smeta'), n = pos.count;
   const bare = new Float32Array(n); let count = 0;
   for (let i = 0; i < n; i++) {
     if (sm.getZ(i) < 0.5) continue;                       // trunk and boughs stay
@@ -1122,10 +1123,39 @@ const WIND_GLSL = `
   // Crysis (GPU Gems 3 ch.16) smoothed triangle wave, for leaf flutter
   float stw(float x){ float t = abs(fract(x + 0.5) * 2.0 - 1.0); return t * t * (3.0 - 2.0 * t); }
 `;
-function windify(material, kind, hasHeight = false, scl = [1, 1, 1], hasPhase = false, hasRoot = false, rootRel = false) {
+// V248 - THE TREE'S ANCHORS STAY INT16 ON THE GPU. The seven per-branch and
+// per-leaf attributes (a third of the world's vertex bytes) ship int16 over
+// a centre / half-range; the visit used to inflate them to float32. Now the
+// attribute keeps its int16 under the name + 'q', the geometry keeps the
+// ranges (userData.quantGpu), the shaders read them through uniforms under
+// the old names (TREE_Q in branch-wind.js / leaf-wind.js), and the few CPU
+// readers go through qAttr(). Position stays float32: the tree's shader
+// code reads it in metres in a dozen places.
+const GPU_QUANT = new Set(['_BROOT', '_BMETA', '_SROOT', '_SMETA', '_LEAF_PIVOT', '_LEAF_AXIS', '_LEAF_SEED']);
+const hasAttr = (g, name) => !!(g.attributes[name] || g.attributes[name + 'q']);
+function qAttr(g, name) {          // getX/getY/getZ in metres, whichever way the attribute is stored
+  const a = g.attributes[name]; if (a) return a;
+  const aq = g.attributes[name + 'q'], q = g.userData.quantGpu && g.userData.quantGpu[name];
+  if (!aq || !q) return null;
+  const get = (i, k) => q.c[k] + q.h[k] * aq.getComponent(i, k);   // (getComponent denormalises the short)
+  return { count: aq.count, getX: (i) => get(i, 0), getY: (i) => get(i, 1), getZ: (i) => get(i, 2) };
+}
+function treeQuantUniforms(g) {    // the TREE_Q uniforms for one geometry, or null when it ships float32
+  const qg = g.userData.quantGpu; if (!qg) return null;
+  const U = {}, names = { _broot: 'Broot', _bmeta: 'Bmeta', _sroot: 'Sroot', _smeta: 'Smeta', _leaf_pivot: 'LeafPivot', _leaf_axis: 'LeafAxis', _leaf_seed: 'LeafSeed' };
+  for (const [attr, u] of Object.entries(names)) {
+    const q = qg[attr]; if (!q) continue;
+    U['u' + u + 'C'] = { value: q.c.length === 1 ? q.c[0] : new THREE.Vector3(...q.c) };
+    U['u' + u + 'H'] = { value: q.h.length === 1 ? q.h[0] : new THREE.Vector3(...q.h) };
+  }
+  return U;
+}
+function windify(material, kind, hasHeight = false, scl = [1, 1, 1], hasPhase = false, hasRoot = false, rootRel = false, treeQ = null) {
   const [SX, SY, SZ] = scl.map(v => v.toFixed(4));
+  if (kind === 'tree' && treeQ) material.defines = Object.assign(material.defines || {}, { TREE_Q: '' });   // in the program prefix, ahead of the GLSL that tests it
   material.onBeforeCompile = (sh) => {
     sh.uniforms.uWt = WIND.t;
+    if (kind === 'tree' && treeQ) Object.assign(sh.uniforms, treeQ);
     sh.uniforms.uMirror = MIRROR;
     sh.uniforms.uLod = LOD;
     sh.uniforms.uMirrorKeep = MIRROR_KEEP;
@@ -1664,6 +1694,11 @@ if (worldBuf) loader.parse(worldBuf, './', async (gltf) => {
         const name = sem === 'POSITION' ? 'position' : sem === 'TEXCOORD_0' ? 'uv' : sem.startsWith('TEXCOORD_') ? 'uv' + sem.slice(9) : sem.toLowerCase();
         const a = o.geometry.attributes[name]; if (!a) continue;
         const src = a.isInterleavedBufferAttribute ? a.data.array : a.array; if (!(src instanceof Int16Array)) continue;
+        if (GPU_QUANT.has(sem)) {   // V248: stays int16; the shader and qAttr() apply the range
+          o.geometry.setAttribute(name + 'q', a); o.geometry.deleteAttribute(name);
+          (o.geometry.userData.quantGpu = o.geometry.userData.quantGpu || {})[name] = { c: q.c.slice(), h: q.h.slice() };
+          continue;
+        }
         const n = a.itemSize, cnt = a.count, out = new Float32Array(cnt * n);
         const stride = a.isInterleavedBufferAttribute ? a.data.stride : n, off = a.isInterleavedBufferAttribute ? a.offset : 0;
         const c = q.c, h = q.h.map(v => v / 32767);
@@ -2202,8 +2237,15 @@ if (worldBuf) loader.parse(worldBuf, './', async (gltf) => {
       // made at load. The draw-range LOD (V236) works per sub-chunk as before.
       const rootQ = new Int16Array(nv * 4), color = hasVertexColour ? null : new Uint8Array(nv * 3), phase = new Uint16Array(nv);
       const trisPer = patterns.map(p => p.length / 3);
-      let v = 0;
-      const vstart = new Uint32Array(nb + 1), bph = new Uint16Array(nb), rootW = new Float32Array(nb * 3);
+      // V248 - HALF THE BLADES ON A PHONE. The phone tier keeps the blades
+      // whose random r1 (their phase) is below 0.5: exactly the prefix the
+      // draw-range LOD draws beyond 110 m, so the painting's distance shows
+      // the same blades it always did and only the near meadow thins. The
+      // dropped blades' vertices are compacted out of every stream here, so
+      // they are never uploaded (~60 MB). ?fullmeadow=1 keeps them all.
+      const HALF = MEMORY_TIER && !Q.has('fullmeadow');
+      let v = 0, fv = 0;
+      const vstart = new Uint32Array(nb + 1), fileStart = new Uint32Array(nb + 1), bph = new Uint16Array(nb), rootW = new Float32Array(nb * 3);
       for (let b = 0; b < nb; b++) {
         if ((b & 0x3fff) === 0 && b) await maybeYield({ type: 'stage', stage: 'expanding', frac: 0.6 * b / nb });
         // (the table's streams are stride-padded by the compressor, so three
@@ -2213,13 +2255,15 @@ if (worldBuf) loader.parse(worldBuf, './', async (gltf) => {
         rv.set(qx, qy, qz).divideScalar(32767).applyMatrix4(TM); rootW[b * 3] = rv.x; rootW[b * 3 + 1] = rv.y; rootW[b * 3 + 2] = rv.z;
         const c = T.cnt.getX(b);
         const ph = Math.round(T.ph.getX(b) * 65535);
-        vstart[b] = v; bph[b] = ph;
+        vstart[b] = v; bph[b] = ph; fileStart[b] = fv; fv += c;
+        if (HALF && ph >= 32768) continue;             // dropped: no vertices of its own (vstart[b + 1] === vstart[b])
         for (let j = 0; j < c; j++) { const q = (v + j) * 4; rootQ[q] = qx; rootQ[q + 1] = qy; rootQ[q + 2] = qz; phase[v + j] = ph; }
         if (color) { const c0 = Math.round(T.col.getX(b) * 255), c1 = Math.round(T.col.getY(b) * 255), c2 = Math.round(T.col.getZ(b) * 255); for (let j = 0; j < c; j++) { color[(v + j) * 3] = c0; color[(v + j) * 3 + 1] = c1; color[(v + j) * 3 + 2] = c2; } }
         v += c;
       }
-      vstart[nb] = v;
-      if (v !== nv) console.warn('meadow repack: vertex count mismatch', v, nv);
+      vstart[nb] = v; fileStart[nb] = fv;
+      if (fv !== nv) console.warn('meadow repack: vertex count mismatch', fv, nv);
+      const kept = (b) => vstart[b + 1] > vstart[b];
       { const t = new THREE.Vector3(), r = new THREE.Quaternion(), sc = new THREE.Vector3(); TM.decompose(t, r, sc);
         if (Math.abs(r.w) < 0.9999) console.warn('meadow repack: the table node is rotated; roots will be off');
         ROOT_Q.c.value.copy(t); ROOT_Q.h.value.copy(sc); }
@@ -2227,10 +2271,18 @@ if (worldBuf) loader.parse(worldBuf, './', async (gltf) => {
       // by the compressor) and the expanded ones
       if (g.attributes._height && !g.attributes._height4) { g.setAttribute('_height4', g.attributes._height); g.deleteAttribute('_height'); }
       const streams = {};
-      for (const [k, a] of Object.entries(g.attributes)) streams[k] = a;
-      streams._root3q = new THREE.InterleavedBufferAttribute(new THREE.InterleavedBuffer(rootQ, 4), 3, 0, true);
-      streams._phase = new THREE.BufferAttribute(phase, 1, true);
-      if (color) streams.color = new THREE.BufferAttribute(color, 3, true);
+      const compact = (a) => {   // the kept blades' vertices of one file stream, contiguous, without the compressor's padding
+        const src = a.isInterleavedBufferAttribute ? a.data.array : a.array, n = a.itemSize;
+        const stride = a.isInterleavedBufferAttribute ? a.data.stride : n, off = a.isInterleavedBufferAttribute ? a.offset : 0;
+        const out = new src.constructor(v * n);
+        for (let b = 0; b < nb; b++) { const c = vstart[b + 1] - vstart[b]; if (!c) continue; let d = vstart[b] * n, sI = fileStart[b] * stride + off; for (let j = 0; j < c; j++, d += n, sI += stride) for (let k = 0; k < n; k++) out[d + k] = src[sI + k]; }
+        return new THREE.BufferAttribute(out, n, a.normalized);
+      };
+      for (const [k, a] of Object.entries(g.attributes)) streams[k] = HALF ? compact(a) : a;
+      if (HALF) await maybeYield();
+      streams._root3q = new THREE.InterleavedBufferAttribute(new THREE.InterleavedBuffer(HALF ? rootQ.subarray(0, v * 4) : rootQ, 4), 3, 0, true);
+      streams._phase = new THREE.BufferAttribute(HALF ? phase.subarray(0, v) : phase, 1, true);
+      if (color) streams.color = new THREE.BufferAttribute(HALF ? color.subarray(0, v * 3) : color, 3, true);
       const view = (a, vA, vB) => {   // the stream from vertex vA, so that local index 0 is vertex vA
         if (a.isInterleavedBufferAttribute) return new THREE.InterleavedBufferAttribute(a.data, a.itemSize, a.offset + vA * a.data.stride, a.normalized);
         return new THREE.BufferAttribute(a.array.subarray(vA * a.itemSize, vB * a.itemSize), a.itemSize, a.normalized);
@@ -2254,13 +2306,12 @@ if (worldBuf) loader.parse(worldBuf, './', async (gltf) => {
           const n = bB - bA, keys = new Float64Array(n);
           for (let i = 0; i < n; i++) keys[i] = bph[bA + i] * 1048576 + i;   // (phase << 20) | local id: one numeric sort
           keys.sort();
-          let ntriC = 0; for (let b = bA; b < bB; b++) ntriC += trisPer[T.pat.getX(b)] || 0;
+          let ntriC = 0; for (let b = bA; b < bB; b++) if (kept(b)) ntriC += trisPer[T.pat.getX(b)] || 0;
           const index = new Uint16Array(ntriC * 3), lodR1 = new Float32Array(n), lodEnd = new Uint32Array(n);
           const vA = vstart[bA], vB = vstart[bB]; let k = 0;
           for (let i = 0; i < n; i++) {
             const b = bA + (keys[i] % 1048576), ph = bph[b];
-            const pat = patterns[T.pat.getX(b)], v0 = vstart[b] - vA;
-            for (let j = 0; j < pat.length; j++) index[k++] = v0 + pat[j];
+            if (kept(b)) { const pat = patterns[T.pat.getX(b)], v0 = vstart[b] - vA; for (let j = 0; j < pat.length; j++) index[k++] = v0 + pat[j]; }
             lodR1[i] = ph === 65535 ? 0 : Math.fround(ph / 65535);   // fract() of the normalised ushort
             lodEnd[i] = k;
           }
@@ -2273,7 +2324,7 @@ if (worldBuf) loader.parse(worldBuf, './', async (gltf) => {
       }
       table.removeFromParent(); tg.dispose();           // V240: its streams are expanded; nothing reads it again
       T_LOAD.meadow = performance.now();
-      console.info(`meadow repack: ${nb} blades, ${nv} verts, ${patterns.length} patterns, ${chunks.length} sub-chunks (uint16) expanded in ${(performance.now() - t0).toFixed(0)} ms`);
+      console.info(`meadow repack: ${nb} blades, ${HALF ? v + ' of ' + nv + ' verts (phone: half the blades)' : nv + ' verts'}, ${patterns.length} patterns, ${chunks.length} sub-chunks (uint16) expanded in ${(performance.now() - t0).toFixed(0)} ms`);
       o.updateWorldMatrix(true, false);
       const sc = new THREE.Vector3(); o.matrixWorld.decompose(new THREE.Vector3(), new THREE.Quaternion(), sc);
       mat.vertexColors = true; mat.needsUpdate = true;      // the tint comes from the table, not the primitive
@@ -2345,16 +2396,17 @@ if (worldBuf) loader.parse(worldBuf, './', async (gltf) => {
         COLLIDE.trunk = { x: n ? sx / n : Tree.cx, z: n ? sz / n : Tree.cz, r: 2.2, top: Tree.base + 0.55 * Tree.height };
         console.log(`tree: root (${COLLIDE.trunk.x.toFixed(2)}, ${COLLIDE.trunk.z.toFixed(2)}) from ${n} verts, crown centre (${Tree.cx.toFixed(2)}, ${Tree.cz.toFixed(2)}), ${Tree.height.toFixed(1)} m tall`);
       }
-      windify(mat, 'tree');
+      const treeQ = treeQuantUniforms(o.geometry);
+      windify(mat, 'tree', false, [1, 1, 1], false, false, false, treeQ);
       const woodDepth=new THREE.MeshDepthMaterial({depthPacking:THREE.RGBADepthPacking,side:THREE.DoubleSide});
-      windify(woodDepth,'tree');
+      windify(woodDepth,'tree', false, [1, 1, 1], false, false, false, treeQ);
       woodDepth.customProgramCacheKey=()=> 'wood-depth-v166';
       // V224: the bark follows the painted crown too (BARK_SHAPE: sub-branches
       // rooted outside the mask collapse, the same 18 % spread as the leaves)
       // and is cut per fragment where it leaves the mass or carries no leaves
       // (vBare, from markBareTwigs). This is the bark's path - the canopy
       // block below only ever sees the leaf mesh.
-      if (isIllustratedBark && o.geometry.attributes._sroot) {
+      if (isIllustratedBark && hasAttr(o.geometry, '_sroot')) {
         const chain = (material, fragment) => {
           const prev = material.onBeforeCompile;
           material.onBeforeCompile = sh => { if (prev) prev(sh);
@@ -2377,7 +2429,8 @@ if (worldBuf) loader.parse(worldBuf, './', async (gltf) => {
       // that same frame; each leaf rotates as one shape about its petiole.
       const bb = bakeNodeTransform(o);
       Tree.init(bb);
-      windify(mat, 'tree', !!o.geometry.attributes._leaf_pivot);
+      const treeQ = treeQuantUniforms(o.geometry);
+      windify(mat, 'tree', hasAttr(o.geometry, '_leaf_pivot'), [1, 1, 1], false, false, false, treeQ);
       if (isOilTree && isIllustratedLeaf) bleedLeafAtlas(tex);
       // live-sun mode clones this material as MeshLambert with emissiveMap =
       // the atlas: three multiplies vColor into the DIFFUSE term only, so
@@ -2420,21 +2473,21 @@ if (worldBuf) loader.parse(worldBuf, './', async (gltf) => {
             }
             `;
           const CANOPY_GLSL = 'uniform vec3 uOilSun; uniform float uOilLive;\n' + CANOPY_FN;
-          const crownShape = o.geometry.attributes._leaf_pivot ? LEAF_SHAPE : '';
+          const crownShape = hasAttr(o.geometry, '_leaf_pivot') ? LEAF_SHAPE : '';
           if (crownShape) { sh.uniforms.uCrownMask = CROWN.mask; sh.uniforms.uCrownBox = CROWN.box; }
-          const hasSeed = !!o.geometry.attributes._leaf_seed;
+          const hasSeed = hasAttr(o.geometry, '_leaf_seed');
           sh.vertexShader = CANOPY_GLSL + (crownShape ? LEAF_SHAPE_DECL : '') + 'varying vec3 vOilNormal; varying vec3 vOilPosition; varying float vCanopyVis; varying float vSunSide; varying float vLeafSeed;\n' + sh.vertexShader.replace(
             '#include <defaultnormal_vertex>',
             '#include <defaultnormal_vertex>\n vOilNormal = inverseTransformDirection(normalize(transformedNormal), viewMatrix);').replace(
             '#include <project_vertex>',
             `${crownShape}
              vOilPosition = (modelMatrix * vec4(transformed,1.0)).xyz;
-             vCanopyVis = canopyTransmission(${o.geometry.attributes._leaf_pivot ? '_leaf_pivot' : 'vOilPosition'}, normalize(mix(vec3(.840,.242,.485),uOilSun,uOilLive)));
+             vCanopyVis = canopyTransmission(${hasAttr(o.geometry, '_leaf_pivot') ? '_leaf_pivot' : 'vOilPosition'}, normalize(mix(vec3(.840,.242,.485),uOilSun,uOilLive)));
              // V226: which side of the crown this leaf is on, lit (+1) to shade (-1).
              // V228 (Eric: 'the dark side is basically the underside'): the
              // form light comes from the upper right, so the split runs top
              // to underside, not just right to left
-             vSunSide = dot(normalize(${o.geometry.attributes._leaf_pivot ? '_leaf_pivot' : 'vOilPosition'} - vec3(uTreeC.x, uTreeBase + 0.72 * uTreeH, uTreeC.y)), normalize(normalize(mix(vec3(.840,.242,.485),uOilSun,uOilLive)) + vec3(0.0, 0.8, 0.0)));
+             vSunSide = dot(normalize(${hasAttr(o.geometry, '_leaf_pivot') ? '_leaf_pivot' : 'vOilPosition'} - vec3(uTreeC.x, uTreeBase + 0.72 * uTreeH, uTreeC.y)), normalize(normalize(mix(vec3(.840,.242,.485),uOilSun,uOilLive)) + vec3(0.0, 0.8, 0.0)));
              vLeafSeed = ${hasSeed ? '_leaf_seed' : '0.5'};
              #include <project_vertex>`);
           sh.fragmentShader = SHADOW_FRAG + CANOPY_FN + `uniform vec3 uOilSun; uniform float uOilLive; varying vec3 vOilNormal; varying vec3 vOilPosition; varying float vCanopyVis; varying float vSunSide; varying float vLeafSeed; varying float vLightBias;
@@ -2502,10 +2555,10 @@ if (worldBuf) loader.parse(worldBuf, './', async (gltf) => {
       };
       if (isOilTree) {
         const depthMaterial=new THREE.MeshDepthMaterial({depthPacking:THREE.RGBADepthPacking,map:tex,alphaTest:.5,side:THREE.DoubleSide});
-        windify(depthMaterial,'tree',!!o.geometry.attributes._leaf_pivot);
+        windify(depthMaterial,'tree',hasAttr(o.geometry, '_leaf_pivot'), [1, 1, 1], false, false, false, treeQ);
         const depthWind=depthMaterial.onBeforeCompile;
         depthMaterial.onBeforeCompile=sh=>{depthWind(sh);
-          if(o.geometry.attributes._leaf_pivot){ sh.uniforms.uCrownMask = CROWN.mask; sh.uniforms.uCrownBox = CROWN.box;
+          if(hasAttr(o.geometry, '_leaf_pivot')){ sh.uniforms.uCrownMask = CROWN.mask; sh.uniforms.uCrownBox = CROWN.box;
             sh.vertexShader=LEAF_SHAPE_DECL+sh.vertexShader.replace('#include <project_vertex>',LEAF_SHAPE+'\n#include <project_vertex>'); }
           sh.fragmentShader=sh.fragmentShader.replace('#include <map_fragment>',LEAF_CUTOUT);};
         depthMaterial.customProgramCacheKey=()=> 'leaf-depth-v223-'+o.name;
@@ -2705,7 +2758,7 @@ let painterly = true;
 // texture on blit, so the ink/background masks keep working.
 const rt = new THREE.WebGLRenderTarget(2, 2, {
   minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter,
-  colorSpace: THREE.SRGBColorSpace, samples: 4 });
+  colorSpace: THREE.SRGBColorSpace, samples: MEMORY_TIER ? 2 : 4 });   // V248: 2x on a phone (its 4x was 52 of 82 MB of targets; the Kuwahara blur hides the difference)
 // depth rides along so the ink line can be MASKED to the near world - at
 // 0.8 it was outlining every cloud lobe and water streak ('background
 // too dark'); the painting's sky and water carry no drawn line
@@ -3159,9 +3212,14 @@ const q = new THREE.Quaternion();
 const _camF = new THREE.Vector3();
 renderer.setAnimationLoop(() => {
   fpsFrames++;
+  // V248: a touch device draws every other frame (30 fps): a still painting
+  // needs no more, and the GPU's work and heat halve. The ladder judges a
+  // frame by half the interval, so the cap itself never trips it.
+  const capped = TOUCH_ACTIVE && (fpsFrames & 1);
+  if (capped) return;
   const now = performance.now();
   const dt = Math.min((now - lastNow) / 1000, 1 / 30);   // clamp: tab-switch gaps must not explode the sims
-  if (TIER.on && TIER.readyAt && now - TIER.readyAt > 3000) tierStep(now - lastNow, now);
+  if (TIER.on && TIER.readyAt && now - TIER.readyAt > 3000) tierStep((now - lastNow) / (TOUCH_ACTIVE ? 2 : 1), now);
   if (TIER.readyAt) STATS.frame(now - lastNow);
   lastNow = now;
   if (WIND.on) {

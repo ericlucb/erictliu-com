@@ -1,10 +1,22 @@
 // Descendants inherit their parent's attachment transform. Apply leaf flutter,
 // shoot flex, bough flex, then the slower trunk curvature, in that order.
+// V248: the file ships these int16 over a centre / half-range; with TREE_Q
+// they stay so on the GPU (a third of the bytes) and are read through the
+// uniforms, under the same names. Without it, float32 as before.
 export const BRANCH_WIND_GLSL = `
+#ifdef TREE_Q
+attribute vec3 _brootq; attribute vec3 _bmetaq; attribute vec3 _srootq; attribute vec3 _smetaq;
+uniform vec3 uBrootC, uBrootH, uBmetaC, uBmetaH, uSrootC, uSrootH, uSmetaC, uSmetaH;
+#define _broot (uBrootC + uBrootH * _brootq)
+#define _bmeta (uBmetaC + uBmetaH * _bmetaq)
+#define _sroot (uSrootC + uSrootH * _srootq)
+#define _smeta (uSmetaC + uSmetaH * _smetaq)
+#else
 attribute vec3 _broot;
 attribute vec3 _bmeta;
 attribute vec3 _sroot;
 attribute vec3 _smeta;
+#endif
 mat3 windRotation(vec2 bend,float angle) {
  float magnitude=length(bend);
  if(magnitude<1e-7)return mat3(1.0);
