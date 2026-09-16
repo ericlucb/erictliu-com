@@ -179,12 +179,18 @@ import { bakeWorldTransform } from './bake-world-transform.js';
 
 // cache-buster: one label per build, so a reload re-uses the cached 117 MB
 // GLB instead of fetching it again (v115 stamped the clock on every load)
-const BUILD = 'v241';
+const BUILD = 'v242';
+// V242: the world's parse finishes in ~200 ms now (meshopt), sooner than
+// this module finishes evaluating - it suspends on later top-level awaits -
+// so the load callback must wait for the module's last line, or it reads
+// constants still in their temporal dead zone (it did: 'Cannot access
+// _camF before initialization', and the island 'could not load').
+let moduleReadyResolve; const MODULE_READY = new Promise((r) => { moduleReadyResolve = r; });
 // V239: the world file is versioned by its own content, not by BUILD - a
 // viewer-only deploy must not make every visitor download 58 MB again, and
 // the door's cache is keyed by this exact URL. scripts/stamp_world.mjs
 // writes it from the file's sha256 (optimize_glb.sh runs it; a test checks it).
-const WORLD_TAG = '19087ff5';
+const WORLD_TAG = '2c36cb00';
 // ?dev=1 shows the full LOOK panel (cameras, review views, painterly dials);
 // visitors get only the settings control (V207)
 const DEV = new URLSearchParams(location.search).has('dev');
@@ -316,6 +322,7 @@ const PLASTER_LIVE = {value:1};
 const windowVariants = await fetch('./window-variants.json?v='+BUILD).then(r=>r.json());
 for(const v of Object.values(windowVariants.views))for(const k of ['eye','target'])v[k][1]+=HOME_DROP;
 const EXTRA_TEXTURES = [];   // V240: textures loaded outside the GLB (the interior sheet, the sky band) join the memory passes
+const isBitmapImage = (im) => !!im && ((typeof ImageBitmap !== 'undefined' && im instanceof ImageBitmap) || im instanceof HTMLImageElement || im instanceof HTMLCanvasElement);
 const ROOM_PAINT={value:new THREE.TextureLoader().load('./interior-warm-v1.webp?v='+BUILD)};
 EXTRA_TEXTURES.push(ROOM_PAINT.value);
 ROOM_PAINT.value.colorSpace=THREE.SRGBColorSpace;
@@ -1788,7 +1795,9 @@ function splitBladeChunks(o) {
 // objects, WEB_HM_tree_og (trunk + core) and WEB_HM_tree_og_cards, so both
 // read the same Tree uniforms in the same space. Returns the world bbox.
 function bakeNodeTransform(o) {
-  return bakeWorldTransform(o);
+  const t = performance.now(); const bb = bakeWorldTransform(o);
+  if (DEV) (T_LOAD.bake = T_LOAD.bake || []).push([o.name, Math.round(performance.now() - t)]);
+  return bb;
 }
 // (the house's dark interior core is part of the asset now - HM_home_core,
 // built by blender/scripts/import_generated.py and shipped in the GLB - so
@@ -1878,7 +1887,6 @@ function forEachTexture(root, fn) {
   });
   for (const t of EXTRA_TEXTURES) visit(t);
 }
-const isBitmapImage = (im) => !!im && ((typeof ImageBitmap !== 'undefined' && im instanceof ImageBitmap) || im instanceof HTMLImageElement || im instanceof HTMLCanvasElement);
 function halveTexture(t) {
   const im = t.image; if (t.isDataTexture || !isBitmapImage(im) || im.width < 2048) return false;
   const c = document.createElement('canvas'); c.width = im.width >> 1; c.height = im.height >> 1;
@@ -1899,8 +1907,9 @@ function releaseImages(root) {
     const im = t.image;
     if (t.isDataTexture || t.isCanvasTexture || !isBitmapImage(im)) return;
     if (!renderer.properties.get(t).__webglTexture) return;
+    const w = im.width, h = im.height;   // (read before close(): a closed bitmap reports 0x0)
     if (im.close) im.close();
-    t.image = { width: im.width, height: im.height }; n++;
+    t.image = { width: w, height: h }; n++;
   });
   if (n) console.info('memory: ' + n + ' decoded images released after upload');
   return n;
@@ -1924,7 +1933,7 @@ const WORLD_URL = (() => {
   try { const u = new URL(w); if (u.protocol === 'https:' && WORLD_HOSTS.some(h => u.hostname === h || u.hostname.endsWith('.' + h))) return u.href; } catch (e) {}
   console.warn('world: ignoring ' + w + ' (host not allowed)'); return null;
 })();
-const GLB_URL = WORLD_URL || './island_world.glb?v=' + WORLD_TAG + (GLB_CB ? '&cb=' + encodeURIComponent(GLB_CB) : '');
+const GLB_URL = WORLD_URL || './' + (DEV && Q.get('glbfile') || 'island_world.glb') + '?v=' + WORLD_TAG + (GLB_CB ? '&cb=' + encodeURIComponent(GLB_CB) : '');   // dev: ?glbfile=<name> loads another world file beside the page (A/B)
 const GLB_ABS = new URL(GLB_URL, location.href).href;
 window.WORLD_URL = WORLD_URL;
 let WORLD_BLOB = null;   // V240: the door hands the downloaded file over directly; the cache is for next time
@@ -1972,12 +1981,41 @@ tellParent({ type: 'stage', stage: 'decoding' });
 T_LOAD.fetched = performance.now();
 if (worldBuf) loader.parse(worldBuf, './', async (gltf) => {
   T_LOAD.parsed = performance.now();
+  await MODULE_READY;
   applyTerrainProfile(gltf.scene,THREE,TERRAIN_PROFILE);
   // every mesh in traversal order, visited one at a time so the meadow's
   // expansion can yield (three's traverse is synchronous; the list is taken
   // first, so the chunk meshes splitBladeChunks adds are not revisited)
   const visit = async (o) => {
     if (!o.isMesh) return;
+    // V242: the props ship int16-quantised, each attribute over its own
+    // centre / half-range (primitive extras.quant, scripts/optimize_glb.py);
+    // back to float32 metres here, before any shader, bake or CPU read sees
+    // them - exactly the floats Draco used to hand over, at finer precision
+    const qn = o.geometry.userData && o.geometry.userData.quant;
+    if (qn && !o.geometry.userData.dequantized) {
+      o.geometry.userData.dequantized = true;
+      const tq = performance.now();
+      for (const [sem, q] of Object.entries(qn)) {
+        const name = sem === 'POSITION' ? 'position' : sem === 'TEXCOORD_0' ? 'uv' : sem.startsWith('TEXCOORD_') ? 'uv' + sem.slice(9) : sem.toLowerCase();
+        const a = o.geometry.attributes[name]; if (!a) continue;
+        const src = a.isInterleavedBufferAttribute ? a.data.array : a.array; if (!(src instanceof Int16Array)) continue;
+        const n = a.itemSize, cnt = a.count, out = new Float32Array(cnt * n);
+        const stride = a.isInterleavedBufferAttribute ? a.data.stride : n, off = a.isInterleavedBufferAttribute ? a.offset : 0;
+        const c = q.c, h = q.h.map(v => v / 32767);
+        for (let i = 0, p = off; i < cnt; i++, p += stride) for (let k = 0; k < n; k++) { const v = src[p + k]; out[i * n + k] = c[k] + h[k] * (v < -32767 ? -32767 : v); }
+        o.geometry.setAttribute(name, new THREE.BufferAttribute(out, n));
+      }
+      // the loader took the bounds from the int16 accessor's min/max (a unit
+      // box); with metres back in POSITION they must be recomputed, or the
+      // frustum cull drops whole pieces (the windows vanished from one eye)
+      o.geometry.boundingBox = null; o.geometry.boundingSphere = null; o.geometry.computeBoundingSphere();
+      if (DEV) (T_LOAD.dequant = T_LOAD.dequant || []).push([o.name, Math.round(performance.now() - tq)]);
+    }
+    if (o.name.includes('clothes')) {   // the cloth rig writes float normals back into this array every frame
+      const nA = o.geometry.attributes.normal;
+      if (nA && !(nA.array instanceof Float32Array)) { const out = new Float32Array(nA.count * 3); for (let i = 0; i < nA.count; i++) for (let k = 0; k < 3; k++) out[i * 3 + k] = nA.getComponent(i, k); o.geometry.setAttribute('normal', new THREE.BufferAttribute(out, 3)); }
+    }
     // V227 (Eric: 'move the bench closer to the tree, it's too far'): the
     // export has it 8.8 m from the trunk; Oga's sits 2 m to its left. Moved
     // here, before its collider is registered below. The turf is level
@@ -2771,7 +2809,7 @@ if (worldBuf) loader.parse(worldBuf, './', async (gltf) => {
       mat.customProgramCacheKey = () => 'treecards-' + o.name;
       console.log(`tree cards: ${o.geometry.attributes.position.count} verts, tint ${hasVC ? 'COLOR_0' : 'none'}, canopy ${Tree.height.toFixed(1)} m x ${Tree.uWidth.value.toFixed(1)} m`);
     } else if (o.name.includes('clothes')) {
-      Cloth.init(o);
+      Cloth.pending = o;   // V242: the rig (0.5 s on an M3 Max) is built after the door opens; the laundry hangs still until then
     }
     const isMeadow=(hasVC&&!tex&&!isPath&&!isGarden&&!/^WEB_HM_home_/.test(m?.name||''))||isPetal;
     const hasAuthoredLighting=o.userData.uniformPlaster||isChimney||isFlashing||isBench||isGarden||isPath||isTreeCards||isMeadow;
@@ -2811,7 +2849,9 @@ if (worldBuf) loader.parse(worldBuf, './', async (gltf) => {
     }
   };
   const meshList = []; gltf.scene.traverse((o) => { if (o.isMesh) meshList.push(o); });
-  for (const o of meshList) { lastYield = performance.now(); await visit(o); }
+  const slow = [];
+  for (const o of meshList) { lastYield = performance.now(); const tv = performance.now(); await visit(o); if (DEV) slow.push([o.name, Math.round(performance.now() - tv)]); }
+  if (DEV) T_LOAD.visits = slow.sort((a, b) => b[1] - a[1]).slice(0, 8);
   T_LOAD.visited = performance.now();
   scene.add(gltf.scene);
   markBareTwigs(gltf.scene);
@@ -2841,7 +2881,7 @@ if (worldBuf) loader.parse(worldBuf, './', async (gltf) => {
   // live sun is the default mode - apply it once the world exists
   $('c-light').dispatchEvent(new Event('change'));
   if (MEMORY_TIER) halveTextures(scene);
-  const freed = releaseCpuCopies(scene, new Set([Cloth.mesh && Cloth.mesh.geometry]));
+  const freed = Q.has('nofree') ? 0 : releaseCpuCopies(scene, new Set([(Cloth.mesh || Cloth.pending) && (Cloth.mesh || Cloth.pending).geometry]));   // dev: ?nofree=1 keeps the CPU copies for inspection
   console.info(`memory: ${(freed / 1048576).toFixed(0)} MB of CPU geometry copies released after upload`);
   // V240: warm the shaders and uploads BEFORE saying ready, so the door
   // opens onto frames that already run at speed (the first frames after a
@@ -2864,6 +2904,7 @@ if (worldBuf) loader.parse(worldBuf, './', async (gltf) => {
     setTimeout(() => el.remove(), 700);
     tellParent({ type: 'ready' });
     TIER.readyAt = performance.now();
+    if (Cloth.pending) setTimeout(() => { const o = Cloth.pending; Cloth.pending = null; const t = performance.now(); Cloth.init(o); console.info(`cloth rig built after ready in ${Math.round(performance.now() - t)} ms`); }, 400);
     if (Q.get('tier') === 'phone') for (const st of TIER.ladder) tierApply(st);
   })();
 }, (err) => {
@@ -3517,6 +3558,7 @@ window.RENDER_ONCE = drawFrame;
 // V237: one controller step without the animation loop (a hidden pane never
 // fires rAF), so the harness can prove the stick and the look drag move the eye.
 window.STEP = (dt) => { if (FLY.on) fly(dt); else walk(dt); };
+moduleReadyResolve();   // the last line: everything above is initialised (see MODULE_READY)
 </script>
 </body>
 </html>
