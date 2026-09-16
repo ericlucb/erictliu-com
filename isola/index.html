@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <title>Isola Quieta — live world</title>
-<link rel="modulepreload" href="./dist/main.js?v=v271">
+<link rel="modulepreload" href="./dist/main.js?v=v272">
 <style>
   html, body { margin: 0; height: 100%; overflow: hidden; background: #5d5f7e; }
   #app { position: fixed; inset: 0; }
@@ -67,14 +67,16 @@
   #stick.live .knob { transition: none; background: rgba(244,239,227,.8); }
   #stick .lbl { position: absolute; left: 0; right: 0; bottom: -20px; text-align: center; color: #f4efe3;
     font: 11px/1 -apple-system, "SF Pro Text", sans-serif; letter-spacing: .08em; text-shadow: 0 1px 4px rgba(20,20,40,.4); }
-  /* a phone: one quiet block at the top of the sky - the look hint with the sideways tip under it -
-     and the stick at the bottom-left; nothing over the island */
-  body.touch #hud { left: 50%; top: calc(7% + env(safe-area-inset-top, 0px)); transform: translate(-50%, 0); align-items: center; gap: 10px; }
-  body.touch #hud.used { transform: translate(-50%, 0) translateY(-4px); }
+  /* a phone: the stick at the bottom-left, the look hint at the bottom-right in the stick label's own
+     type (the sideways tip a line above it, once); the sky and the island stay clear */
+  body.touch #hud { left: auto; top: auto; right: calc(22px + env(safe-area-inset-right, 0px)); bottom: calc(1px + env(safe-area-inset-bottom, 0px));
+    transform: none; flex-direction: column-reverse; align-items: flex-end; gap: 12px;   /* (reversed: the look hint on the bottom line, level with 'move'; the tip a line above) */ font: 11px/1 -apple-system, "SF Pro Text", sans-serif; letter-spacing: .08em; text-shadow: 0 1px 4px rgba(20,20,40,.4); }
+  body.touch #hud.used { transform: translateY(4px); }
   body.touch .row-move { display: none; }   /* a finger drags to look and moves with the stick */
+  body.touch .row-look { gap: 9px; }
   body.touch .look-gesture { width: auto; }
   body.touch .look-gesture .mouse { display: none; }   /* the arrows stay, the mouse glyph goes */
-  body.touch .look-gesture svg { width: 44px; height: 22px; }
+  body.touch .look-gesture svg { width: 40px; height: 20px; }
   #fps {
     display: none;
     position: fixed; right: 14px; top: 12px; color: #efe9dc;
@@ -143,8 +145,8 @@
 // line and main.js's BUILD in step); ?cb=<x> busts it while developing
 const q = new URLSearchParams(location.search);
 // the height grids leave with the program, not after it (a <link preload> did this in Chrome; WebKit fetched them twice)
-window.GRIDS_FETCH = fetch('./world-grids.bin?v=v271');
-import((q.has('src') ? './src/main.js' : './dist/main.js') + '?v=v271' + (q.get('cb') ? '&cb=' + encodeURIComponent(q.get('cb')) : ''));
+window.GRIDS_FETCH = fetch('./world-grids.bin?v=v272');
+import((q.has('src') ? './src/main.js' : './dist/main.js') + '?v=v272' + (q.get('cb') ? '&cb=' + encodeURIComponent(q.get('cb')) : ''));
 </script>
 </body>
 </html>
