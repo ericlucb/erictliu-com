@@ -133,24 +133,36 @@
        can be without running off screen. */
     #kPanelB { top:auto !important; bottom:calc(100% + 9px) !important; width:min(720px, calc((var(--mr) + var(--pw) * 0.4375) * 2 - 16px)) !important; max-height:calc(var(--vph) * 0.62) !important; }
   }
-  /* The door to Isola Quieta (ENTER). Nothing loads until the click; then
-     the link becomes a small door with a ring that fills with the real
-     download, the door swings open, and the world fades in over the page. */
-  #kEnter { display:inline-grid; place-items:center; position:relative; }
+  /* The door to Isola Quieta: a small door with ENTER under it. Nothing loads
+     until the click; then the word gives way to a ring that fills with the
+     real download and a count, the door swings open on its hinge (a 3D turn
+     under the icon's own perspective), and the world fades in over the page.
+     The leaf and the glow are HTML over the SVG frame so they can turn in 3D. */
+  #kEnter { display:grid; justify-items:center; gap:4px; position:relative; text-decoration:none; }
   #kEnter.kLoading { pointer-events:none; }
-  #kEnter svg.kDoorIcon { width:clamp(46px, 4.2vw, 64px); height:auto; display:block; overflow:visible; }
-  #kEnter .kRing { fill:none; stroke:currentColor; stroke-width:2; opacity:.22; }
-  #kEnter .kRingFill { fill:none; stroke:currentColor; stroke-width:2.5; stroke-linecap:round; transform:rotate(-90deg); transform-origin:50% 50%; transition:stroke-dashoffset .25s linear; }
-  #kEnter .kLeafI { transform-box:fill-box; transform-origin:0% 50%; transition:transform 1.15s cubic-bezier(.5,.02,.18,1); }
-  #kEnter.kOpen .kLeafI { transform:scaleX(.12) skewY(-12deg); }
-  #kEnter .kGlow { opacity:0; transition:opacity 1s ease; }
+  #kEnter .kDoorIcon { position:relative; width:clamp(46px, 4.2vw, 64px); aspect-ratio:1; display:block; perspective:150px; perspective-origin:50% 50%; }
+  #kEnter .kDoorIcon svg { position:absolute; inset:0; width:100%; height:100%; display:block; overflow:visible; }
+  #kEnter .kRing, #kEnter .kRingFill { opacity:0; transition:opacity .45s ease; }
+  #kEnter .kRing { fill:none; stroke:currentColor; stroke-width:2; }
+  #kEnter .kRingFill { fill:none; stroke:currentColor; stroke-width:2.5; stroke-linecap:round; transform:rotate(-90deg); transform-origin:50% 50%; transition:stroke-dashoffset .25s linear, opacity .45s ease; }
+  #kEnter.kLoading .kRing { opacity:.22; }
+  #kEnter.kLoading .kRingFill { opacity:1; }
+  #kEnter .kGlow, #kEnter .kLeaf { position:absolute; left:34.375%; top:25%; width:31.25%; height:50%; }
+  #kEnter .kGlow { background:linear-gradient(100deg, #f8dfb4, #f2c98a); opacity:0; transition:opacity 1s ease; }
   #kEnter.kOpen .kGlow { opacity:1; }
-  #kEnter .kPct { position:absolute; left:50%; top:100%; transform:translate(-50%, 4px); font:clamp(10px, min(0.9vw, 1.7vh), 13px)/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing:.12em; font-variant-numeric:tabular-nums; opacity:.75; white-space:nowrap; transition:opacity .5s; }
+  #kEnter .kLeaf { background:currentColor; transform-origin:0% 50%; transform-style:preserve-3d; backface-visibility:hidden; transition:transform 1.35s cubic-bezier(.55,0,.15,1); }
+  #kEnter .kLeaf::after { content:''; position:absolute; right:19%; top:50%; width:15%; aspect-ratio:1; border-radius:50%; background:var(--kbg, #fbfbfa); transform:translateY(-50%); }   /* the knob */
+  @media (hover:hover) { #kEnter:hover .kLeaf { transform:rotateY(16deg); } }
+  #kEnter.kOpen .kLeaf, #kEnter.kOpen:hover .kLeaf { transform:rotateY(104deg); }
+  #kEnter .kWord, #kEnter .kPct { grid-area:2 / 1; transition:opacity .35s ease; white-space:nowrap; }
+  #kEnter .kPct { font:clamp(10px, min(0.9vw, 1.7vh), 13px)/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing:.12em; font-variant-numeric:tabular-nums; opacity:0; align-self:center; }
+  #kEnter.kLoading .kWord { opacity:0; }
+  #kEnter.kLoading .kPct { opacity:.75; }
   #kEnter.kOpen .kPct { opacity:0; transition-delay:.3s; }
-  #kDoor { position:fixed; inset:0; z-index:40; background:#5d5f7e; opacity:0; transition:opacity 1.4s cubic-bezier(.4,0,.2,1); }
+  #kDoor { position:fixed; inset:0; z-index:40; background:#5d5f7e; opacity:0; transition:opacity 1.6s cubic-bezier(.4,0,.2,1); }
   #kDoor.open { opacity:1; }
   #kDoor iframe { position:absolute; inset:0; width:100%; height:100%; border:0; background:#5d5f7e; }
-  @media (prefers-reduced-motion: reduce) { #kEnter .kLeafI, #kDoor { transition-duration:.3s; } }
+  @media (prefers-reduced-motion: reduce) { #kEnter .kLeaf, #kEnter .kGlow, #kDoor { transition-duration:.3s; } }
 </style>
 </helmet>
 <div id="kStage" style="--pw:min(60vw, 114vh, (100vh - 230px) * 1.33); --pk:1; --mr:calc(min(9vw, 128px) + clamp(0px, (100vw - 1100px) * 0.34, 140px)); position:fixed; inset:0; background:#fbfbfa; display:grid; place-items:center; overflow:hidden; touch-action:none; cursor:default;">
@@ -274,7 +286,13 @@
   </div>
 
   <nav id="kNav" style="position:fixed; right:min(3.4vw, 46px); top:50%; transform:translateY(-50%); z-index:2; display:grid; gap:15px; justify-items:end; font:clamp(13px, min(1.2vw, 2.2vh), 24px)/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing:.19em; color:#a6a7ac;">
-    <a id="kEnter" href="#" style="color:#a6a7ac; transition:color .16s;" style-hover="color:#141414;">ENTER</a>
+    <a id="kEnter" href="#" aria-label="Enter Isola Quieta" style="color:#a6a7ac; transition:color .16s;" style-hover="color:#141414;">
+      <span class="kDoorIcon" aria-hidden="true">
+        <svg viewBox="0 0 64 64"><circle class="kRing" cx="32" cy="32" r="29"></circle><circle class="kRingFill" cx="32" cy="32" r="29" stroke-dasharray="182.21" stroke-dashoffset="167.63"></circle><rect x="20" y="14" width="24" height="36" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"></rect></svg>
+        <span class="kGlow"></span><span class="kLeaf"></span>
+      </span>
+      <span class="kWord">ENTER</span><span class="kPct" aria-live="polite"></span>
+    </a>
   </nav>
 
   <div id="kPanel" style="position:fixed; right:calc(var(--mr) + var(--pw) * 0.4375); transform:translateX(50%); top:min(calc(50% + var(--pw) * var(--pk) * 0.215), calc(100vh - 44px)); transition:top .3s cubic-bezier(.22,.61,.36,1), right .3s cubic-bezier(.22,.61,.36,1); z-index:3; width:max-content; display:grid; justify-items:stretch; font:10px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing:.07em; color:#8a8b90; gap:12px; user-select:none;">
@@ -468,16 +486,9 @@ class Component extends DCLogic {
     if (this.door) return;
     const en = document.getElementById('kEnter'); if (!en) return;
     const ink = (this.theme && this.theme.ink) || '#141414', bg = (this.theme && this.theme.bg) || '#fbfbfa';
-    const C = (2 * Math.PI * 29).toFixed(2);
-    en.classList.add('kLoading'); en.setAttribute('aria-busy', 'true'); en.style.color = ink;
-    en.innerHTML = '<svg class="kDoorIcon" viewBox="0 0 64 64" role="img" aria-label="Opening the door to the island">'
-      + '<circle class="kRing" cx="32" cy="32" r="29"></circle>'
-      + '<circle class="kRingFill" cx="32" cy="32" r="29" stroke-dasharray="' + C + '" stroke-dashoffset="' + (C * 0.92).toFixed(2) + '"></circle>'
-      + '<rect class="kGlow" x="22" y="16" width="20" height="32" fill="#f4cf95"></rect>'
-      + '<g class="kLeafI"><rect x="22" y="16" width="20" height="32" fill="currentColor"></rect><circle cx="37.5" cy="32.5" r="1.5" fill="' + bg + '"></circle></g>'
-      + '<rect x="20" y="14" width="24" height="36" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"></rect>'
-      + '</svg><span class="kPct" aria-live="polite">0%</span>';
-    const ring = en.querySelector('.kRingFill'), pct = en.querySelector('.kPct');
+    const C = 2 * Math.PI * 29;
+    en.classList.add('kLoading'); en.setAttribute('aria-busy', 'true'); en.style.color = ink; en.style.setProperty('--kbg', bg);
+    const ring = en.querySelector('.kRingFill'), pct = en.querySelector('.kPct'), leaf = en.querySelector('.kLeaf');
     // ONE ring, 0 to 100, never spinning (Eric: 'it should just be loading
     // throughout ... and give a loading percentage'). The download owns
     // 2-80 % by bytes; the viewer's stages after it (decoding the file,
@@ -526,25 +537,32 @@ class Component extends DCLogic {
     const frame = d.querySelector('#kWorld');
     let opened = false, heard = false;
     // the arrival, in three beats: the ring reaches 100 and holds for a moment, the
-    // little door swings open (1.15 s, eased), and once it stands open the world fades
-    // in over the page (1.4 s). About three seconds from the last byte to the island.
+    // little door turns open on its hinge (1.35 s, eased both ends), and as the turn
+    // ends the world fades in over the page (1.6 s); the portrait keeps moving under
+    // the fade and rests once it is done. About three and a half seconds from the last
+    // byte to the island.
     const open = () => {
       if (opened) return; opened = true;
       if (creep) { clearInterval(creep); creep = null; }
       target = 1; paint(1);   // (the meadow's stages arrive after ready; nothing moves the ring back)
-      setTimeout(() => en.classList.add('kOpen'), 650);
-      setTimeout(() => {
+      let faded = false;
+      const fadeIn = () => {
+        if (faded) return; faded = true;
         d.classList.add('open');
-        cancelAnimationFrame(this.raf);            // the portrait rests while the world runs
         if (this.dance) this.toggleDance();
-        setTimeout(() => { try { frame.contentWindow.focus(); } catch (e) {} }, 1500);
-      }, 650 + 950);
+        setTimeout(() => { cancelAnimationFrame(this.raf); try { frame.contentWindow.focus(); } catch (e) {} }, 1700);   // the portrait rests behind the open door
+      };
+      setTimeout(() => {
+        en.classList.add('kOpen');
+        leaf.addEventListener('transitionend', () => setTimeout(fadeIn, 60), { once: true });   // the turn's end starts the fade
+        setTimeout(fadeIn, 1500);                                                                  // (or a timer, if the turn never reports)
+      }, 650);
     };
     const fail = (msg) => {
       console.warn('door:', msg);
       if (creep) { clearInterval(creep); creep = null; }
       en.classList.remove('kLoading', 'kOpen'); en.removeAttribute('aria-busy'); en.style.color = '';
-      en.textContent = 'COULD NOT OPEN';
+      en.querySelector('.kWord').textContent = 'COULD NOT OPEN';
       setTimeout(() => this.closeDoor(), 2500);   // (pops the history entry, which closes)
     };
     this.onDoorMsg = async (ev) => {
@@ -589,7 +607,7 @@ class Component extends DCLogic {
     if (this.abortWorld) { this.abortWorld(); this.abortWorld = null; }   // a download still running stops with the door
     this.door.remove(); this.door = null;
     const en = document.getElementById('kEnter');
-    if (en) { en.classList.remove('kLoading', 'kOpen'); en.removeAttribute('aria-busy'); en.style.color = ''; en.textContent = 'ENTER'; }
+    if (en) { en.classList.remove('kLoading', 'kOpen'); en.removeAttribute('aria-busy'); en.style.color = ''; en.querySelector('.kWord').textContent = 'ENTER'; en.querySelector('.kPct').textContent = ''; }
     this._t = performance.now() - 16.7;
     this.raf = requestAnimationFrame(this.loop);
   }
@@ -864,8 +882,6 @@ class Component extends DCLogic {
     addEventListener('click', this.onClick);
     addEventListener('input', this.onInput);
 
-    const en = document.getElementById('kEnter');
-    if (en) en.textContent = 'ENTER';   // the door to the island (openDoor); WORDS was the old random tease
     this.applyTheme();
     this.syncPanel();
     this._t = performance.now();

@@ -81,8 +81,12 @@ unbinds the domain, so leave it in place.
 
 ## The door (ENTER → Isola Quieta)
 
-`ENTER` (right edge) opens a door onto Isola Quieta, Kazuo Oga's island
-cottage rebuilt as a walkable three.js world. The world lives in `isola/`, a
+The little door with `ENTER` under it (right edge; bottom centre on a
+phone) opens onto Isola Quieta, Kazuo Oga's island cottage rebuilt as a
+walkable three.js world. A click swaps the word for a ring that fills with
+the real download and a count; at 100 the door turns open on its hinge (a 3D
+turn under the icon's own perspective, the lit room behind it) and, as the
+turn ends, the world fades in over the page. The world lives in `isola/`, a
 verbatim copy of the `web/` folder of
 [ericlucb/isola-quieta](https://github.com/ericlucb/isola-quieta) (private).
 To update it after the viewer changes, run `npm run site` in isola-quieta: it
