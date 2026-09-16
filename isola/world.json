@@ -14,7 +14,9 @@
     "houseSillFlowers": "WEB_HM_home_garden_37",
     "boat": "WEB_HM_shore_paint_0",
     "rope": "WEB_HM_shore_paint_2",
-    "path0": "WEB_path_0"
+    "path0": "WEB_path_0",
+    "roofPaint1": "WEB_HM_home_paint_1",
+    "roofPaint2": "WEB_HM_home_paint_2"
   },
   "prefixes": {
     "housePart": "WEB_HM_home_",
