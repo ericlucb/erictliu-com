@@ -55,20 +55,24 @@
   .lk-touch { display: none; }
   body.touch .lk-mouse { display: none; }
   body.touch .lk-touch { display: inline; }
-  /* V239 - MOUSE LOOK (Eric: 'just follow the mouse when you enter so you
-     don't have to click around ... users can click x if they wanna get out
-     of it'): the view follows the cursor; the pill at the top right turns
-     that off and on. Hidden on touch, where the stick and the drag are it. */
-  #mlook {
-    position: fixed; right: calc(14px + env(safe-area-inset-right, 0px)); top: calc(12px + env(safe-area-inset-top, 0px));
-    appearance: none; background: rgba(35,43,51,.28); border: 1px solid rgba(244,239,227,.42); color: #f4efe3;
-    font: 11px/1 -apple-system, "SF Pro Text", sans-serif; letter-spacing: .12em; text-transform: uppercase;
-    padding: 8px 11px; border-radius: 999px; cursor: pointer; opacity: .78; backdrop-filter: blur(6px);
-    transition: opacity .4s, background .16s;
+  /* V239/V240 - MOUSE LOOK (Eric: 'just follow the mouse when you enter';
+     'esc ... a lil esc icon at the top that says to stop looking around'):
+     the view follows the cursor from the moment you enter; Esc (the key, or
+     the chip at the top) frees the cursor; a click in the world looks again
+     and holds the mouse. Hidden on touch, where the stick and the drag are it. */
+  #lookchip {
+    position: fixed; left: 50%; top: calc(12px + env(safe-area-inset-top, 0px)); transform: translateX(-50%);
+    display: flex; align-items: center; gap: 8px; color: #f4efe3;
+    font: 11px/1 -apple-system, "SF Pro Text", sans-serif; letter-spacing: .1em; text-transform: uppercase;
+    padding: 7px 11px 7px 8px; border-radius: 999px; background: rgba(35,43,51,.28); border: 1px solid rgba(244,239,227,.3);
+    opacity: .72; backdrop-filter: blur(6px); cursor: pointer; user-select: none; transition: opacity .4s;
   }
-  #mlook:hover { background: rgba(35,43,51,.5); opacity: 1; }
-  #mlook.off { opacity: .55; }
-  body.touch #mlook, body.locked #mlook { display: none; }
+  #lookchip:hover { opacity: 1; }
+  #lookchip kbd { display: grid; place-items: center; height: 20px; padding: 0 6px; font: 10px/1 -apple-system, "SF Pro Text", sans-serif;
+    letter-spacing: .08em; border: 1px solid rgba(244,239,227,.55); border-radius: 5px; background: rgba(35,43,51,.25); box-shadow: 0 1px 0 rgba(244,239,227,.2); }
+  #lookchip .when-free, body.free #lookchip .when-looking, body.free #lookchip kbd { display: none; }
+  body.free #lookchip .when-free { display: inline; }
+  body.touch #lookchip { display: none; }
   body.locked { cursor: none; }
   #fps {
     display: none;
@@ -129,7 +133,7 @@
     </svg>
   </span><span><span class="lk-mouse">move the mouse to look · click to hold it</span><span class="lk-touch">drag to look</span></span></span>
 </div>
-<button id="mlook" type="button" aria-pressed="true" title="Mouse look: the view follows the mouse. Click to turn it off.">✕ mouse look</button>
+<div id="lookchip" role="status"><kbd>esc</kbd><span class="when-looking">stop looking around</span><span class="when-free">click to look around</span></div>
 <div id="fps"></div>
 <div id="stick" aria-label="Move stick"><div class="base"></div><div class="knob"></div><div class="lbl">move</div></div>
 <details id="panel" class="hud-panel">
@@ -175,7 +179,7 @@ import { bakeWorldTransform } from './bake-world-transform.js';
 
 // cache-buster: one label per build, so a reload re-uses the cached 117 MB
 // GLB instead of fetching it again (v115 stamped the clock on every load)
-const BUILD = 'v239';
+const BUILD = 'v240';
 // V239: the world file is versioned by its own content, not by BUILD - a
 // viewer-only deploy must not make every visitor download 58 MB again, and
 // the door's cache is keyed by this exact URL. scripts/stamp_world.mjs
@@ -241,9 +245,26 @@ function boatify(material, o, rope) {
 // instead of black - the only way to get a PNG of what this viewer actually
 // ships out of a headless browser. OFF by default: preserving the buffer costs
 // a full-screen copy every frame, and this is a 3.4 M vertex scene.
+const Q = new URLSearchParams(location.search);
+const TOUCH = matchMedia('(hover: none) and (pointer: coarse)').matches;
+// V240 - THE PHONE'S MEMORY (Eric: 'on mobile chrome iOS it loads but then
+// it just craps out'). iOS Chrome is WebKit, and WebKit kills a page that
+// crosses its memory ceiling with no error - and this world at a phone's
+// size was ~1.3 GB: 305 MB of geometry, 307 MB of textures, 230 MB of
+// render targets and a 446 MB JS heap holding a CPU copy of every buffer
+// (measured 2026-09-16, docs/PERF-2026-09-15.md). Two answers, both at
+// load, before the first frame allocates anything: on EVERY device the CPU
+// copies go after upload (releaseCpuCopies) and the decoded images after
+// upload (releaseImages); on a touch-first device (or ?tier=phone) the
+// MEMORY tier also halves textures 2048 px and up, draws the shadow map at
+// 2048, the mirror at 512, the canvas at pixel ratio 1.5 with no MSAA on
+// the canvas itself (the painterly target keeps its 4x; the post quad has
+// no edges to smooth). The timed-frame ladder (V237) still runs on top.
+const MEMORY_TIER = TOUCH || Q.get('tier') === 'phone';
+if (MEMORY_TIER) window.SHADOW_FORCE = 2048;
 const renderer = new THREE.WebGLRenderer({
-  antialias: true,
-  preserveDrawingBuffer: new URLSearchParams(location.search).has('capture'),
+  antialias: Q.has('aa'),            // the painterly path resolves its own MSAA; ?aa=1 for painterly-off dev views
+  preserveDrawingBuffer: Q.has('capture'),
 });
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -255,10 +276,16 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 // 60 fps never moves and draws exactly what it drew before. ?dpr=1.25 pins
 // the ratio, ?tier=phone applies the whole ladder at load (to compare on a
 // phone), ?tier=full and ?capture=1 switch the ladder off (the harness).
-const Q = new URLSearchParams(location.search);
-const DPR_MAX = Math.min(devicePixelRatio, 2);
+const DPR_MAX = Math.min(devicePixelRatio, MEMORY_TIER ? 1.5 : 2);
 let DPR = Q.get('dpr') ? Math.max(0.5, Math.min(+Q.get('dpr') || DPR_MAX, DPR_MAX)) : DPR_MAX;
-renderer.setPixelRatio(DPR);
+// V240: a PIXEL BUDGET. The painterly pass owns three full-frame targets
+// (4x MSAA colour+depth, two half-float MRT pairs) - at a 5K window and
+// DPR 2 that is ~1 GB of GPU memory and a frame that never finishes. The
+// effective pixel ratio shrinks so the frame never exceeds the budget; a
+// 1440x600 review pane at DPR 2 (1.7 M px) is untouched.
+const PIXEL_BUDGET = MEMORY_TIER ? 2.0e6 : 4.2e6;
+function fitDpr(base) { const px = innerWidth * innerHeight * base * base; return px > PIXEL_BUDGET ? base * Math.sqrt(PIXEL_BUDGET / px) : base; }
+renderer.setPixelRatio(fitDpr(DPR));
 renderer.setSize(innerWidth, innerHeight);
 renderer.toneMapping = THREE.NoToneMapping;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -288,7 +315,9 @@ const plasterColor = await fetch('./plaster-color.json?v='+BUILD).then(r=>r.json
 const PLASTER_LIVE = {value:1};
 const windowVariants = await fetch('./window-variants.json?v='+BUILD).then(r=>r.json());
 for(const v of Object.values(windowVariants.views))for(const k of ['eye','target'])v[k][1]+=HOME_DROP;
+const EXTRA_TEXTURES = [];   // V240: textures loaded outside the GLB (the interior sheet, the sky band) join the memory passes
 const ROOM_PAINT={value:new THREE.TextureLoader().load('./interior-warm-v1.webp?v='+BUILD)};
+EXTRA_TEXTURES.push(ROOM_PAINT.value);
 ROOM_PAINT.value.colorSpace=THREE.SRGBColorSpace;
 // dusk gradient dome + the painting's own sky panorama on a band
 {
@@ -315,7 +344,8 @@ ROOM_PAINT.value.colorSpace=THREE.SRGBColorSpace;
   dome.renderOrder = -3;
   scene.add(dome);
 
-  const panoTex = new THREE.TextureLoader().load('./sky_panorama.jpg?v=' + BUILD);
+  const panoTex = new THREE.TextureLoader().load('./sky_panorama.jpg?v=' + BUILD, (t) => { if (MEMORY_TIER) halveTexture(t); });
+  EXTRA_TEXTURES.push(panoTex);
   panoTex.colorSpace = THREE.SRGBColorSpace;
   panoTex.wrapS = THREE.RepeatWrapping;
   WINDOW_SKY.value = panoTex;
@@ -496,7 +526,7 @@ const FLY = { on: true, vel: new THREE.Vector3(), yaw: 0, pitch: 0, roll: 0,
 // The base direction (FLY.yaw/pitch) is what drag, hold and LOOKAT set; the
 // hover offset (HOVER.x/y) sits on top and is held still during a drag or
 // a hold, then re-based on release so the view never jumps. The pill at the
-// top right (#mlook) switches hover off and on. Off in the capture harness.
+// top (#lookchip) and the Esc key free the cursor. Off in the capture harness.
 const HOVER = { on: false, seen: false, locked: false, x: 0, y: 0, mx: 0.5, my: 0.5 };
 const HOVER_X = 70 * Math.PI / 180, HOVER_Y = 28 * Math.PI / 180, HOVER_DEAD = 0.06;
 function hoverTarget() {
@@ -582,13 +612,12 @@ window.restoreDefault = restoreDefault;
 // touch pointer turns on body.touch: the thumb stick appears and the WASD
 // hint goes. The look drag is bound to ONE pointer id, so the stick's finger
 // and a second finger never steer it.
-const TOUCH = matchMedia('(hover: none) and (pointer: coarse)').matches;
 const MOVE = { f: 0, r: 0 };                 // the stick: forward / right in [-1, 1]
 function enableTouch() {
   if (document.body.classList.contains('touch')) return;
   document.body.classList.add('touch');
   moveHint.setAttribute('aria-label', 'Drag to look around. Use the stick to move.');
-  if (HOVER.on) setHover(false);
+  if (HOVER.on) setLooking(false);
 }
 renderer.domElement.addEventListener('pointerdown', (e) => {
   if (!FLY.on || e.button > 1 || HOVER.locked) return;
@@ -613,28 +642,36 @@ addEventListener('mousemove', (e) => {
   if (HOVER.locked) { FLY.lookX -= e.movementX * 0.0016; FLY.lookY -= e.movementY * 0.0016; return; }
   HOVER.mx = e.clientX / innerWidth; HOVER.my = e.clientY / innerHeight; HOVER.seen = true;
 });
-renderer.domElement.addEventListener('click', () => {
-  if (!HOVER.on || !FLY.on || HOVER.locked || FLY.dragMoved > 4) return;   // a drag is not a click
-  try { const p = renderer.domElement.requestPointerLock({ unadjustedMovement: true }); if (p && p.catch) p.catch(() => {}); } catch (_) {}
-});
-document.addEventListener('pointerlockchange', () => {
-  HOVER.locked = document.pointerLockElement === renderer.domElement;
-  document.body.classList.toggle('locked', HOVER.locked);
-  if (!HOVER.locked) rebaseHover();
-});
-document.addEventListener('pointerlockerror', () => { HOVER.locked = false; document.body.classList.remove('locked'); });
-const mlookEl = document.getElementById('mlook');
-function setHover(on) {
+// LOOKING or FREE. Looking: the view follows the cursor, a click holds the
+// mouse (pointer lock). Esc - the key, the chip, or the browser's own exit
+// from a held mouse - frees the cursor; the next click in the world looks
+// again. Nothing here changes the view direction: leaving looking bakes
+// the hover offset into the base, entering it starts from where you are.
+function setLooking(on) {
   if (!on && HOVER.locked) { try { document.exitPointerLock(); } catch (_) {} }
   if (!on) { FLY.yaw += HOVER.x; FLY.pitch += HOVER.y; HOVER.x = HOVER.y = 0; }   // bake the offset in: no jump
   HOVER.on = on;
-  mlookEl.setAttribute('aria-pressed', String(on)); mlookEl.classList.toggle('off', !on);
-  mlookEl.textContent = on ? '✕ mouse look' : '○ mouse look';
-  mlookEl.title = on ? 'Mouse look: the view follows the mouse. Click to turn it off.' : 'Mouse look is off: drag to look. Click to turn it on.';
+  document.body.classList.toggle('free', !on);
 }
-mlookEl.addEventListener('click', () => setHover(!HOVER.on));
-setHover(!TOUCH && !Q.has('capture') && Q.get('look') !== 'drag');
-window.HOVER = HOVER; window.setHover = setHover;
+function holdMouse() {
+  if (HOVER.locked || TOUCH) return;
+  try { const p = renderer.domElement.requestPointerLock({ unadjustedMovement: true }); if (p && p.catch) p.catch(() => {}); } catch (_) {}
+}
+renderer.domElement.addEventListener('click', () => {
+  if (!FLY.on || FLY.dragMoved > 4 || document.body.classList.contains('touch')) return;   // a drag is not a click
+  if (!HOVER.on) setLooking(true);
+  holdMouse();
+});
+document.addEventListener('pointerlockchange', () => {
+  const was = HOVER.locked;
+  HOVER.locked = document.pointerLockElement === renderer.domElement;
+  document.body.classList.toggle('locked', HOVER.locked);
+  if (was && !HOVER.locked) setLooking(false);   // the browser's Esc: the cursor is free, so is the view
+});
+document.addEventListener('pointerlockerror', () => { HOVER.locked = false; document.body.classList.remove('locked'); });
+document.getElementById('lookchip').addEventListener('click', () => { if (HOVER.on) setLooking(false); else { setLooking(true); } });
+setLooking(!TOUCH && !Q.has('capture') && Q.get('look') !== 'drag');
+window.HOVER = HOVER; window.setLooking = setLooking;
 // the thumb stick: its own pointer, captured; magnitude past a 12 % dead
 // zone is the speed, direction is forward/right in the camera's frame
 const stickEl = document.getElementById('stick'), stickKnob = stickEl.querySelector('.knob');
@@ -1154,7 +1191,7 @@ const MIRROR_KEEP = { value: 1 };
 // window.LOD_RANGE_OFF = true draws the full index again for A/B checks.
 const TIER = { on: !Q.has('capture') && Q.get('tier') !== 'full' && !Q.get('dpr'), readyAt: 0, dts: [], lastStep: 0, step: 0, applied: [],
                ladder: [{ dpr: 1.5 }, { dpr: 1.25 }, { dpr: 1.0 }, { mirror: 512 }, { shadow: 2048 }] };
-function applyDpr(v) { DPR = v; renderer.setPixelRatio(DPR); renderer.setSize(innerWidth, innerHeight); sizePost(); }
+function applyDpr(v) { DPR = v; renderer.setPixelRatio(fitDpr(DPR)); renderer.setSize(innerWidth, innerHeight); sizePost(); }
 function tierApply(st) {
   if (st.dpr !== undefined) { if (st.dpr >= DPR) return false; applyDpr(st.dpr); }
   if (st.mirror) { if (!seaMesh) return false; seaMesh.getRenderTarget().setSize(st.mirror, st.mirror); }
@@ -1778,14 +1815,75 @@ renderer.domElement.addEventListener('webglcontextlost', (e) => { e.preventDefau
 // REMOVE it, as the load path does - a faded #loading is still a full-screen
 // fixed div on top of the canvas and would swallow every drag and wheel.
 renderer.domElement.addEventListener('webglcontextrestored', () => {
-  const el = document.getElementById('loading');
-  if (el) { el.style.opacity = 0; setTimeout(() => el.remove(), 700); }
+  // V240: the CPU copies were released after upload, so nothing can be
+  // re-uploaded - start over (the door's cache makes that cheap)
+  location.reload();
 });
 
 const draco = new DRACOLoader().setDecoderPath('./vendor/draco/');
 // V216: the shipped GLB is meshopt-compressed with quantized normals/uv/colour
 // (scripts/optimize_glb.sh); the Draco loader stays for an unoptimised export
 const loader = new GLTFLoader().setDRACOLoader(draco).setMeshoptDecoder(MeshoptDecoder);
+// V240 - MEMORY PASSES (see MEMORY_TIER). three keeps every attribute's
+// typed array after the upload, for re-uploads and CPU reads; after load
+// nothing here reads geometry but the cloth. Freed on upload with three's
+// own onUpload pattern; bounds are computed first so the cull never needs
+// the array; a lost context reloads the page instead of re-uploading.
+function disposeArray() { this.array = null; }
+function releaseCpuCopies(root, keep) {
+  let bytes = 0; const seen = new Set();
+  root.traverse(o => {
+    if (!o.isMesh || !o.geometry || keep.has(o.geometry)) return;
+    const g = o.geometry;
+    if (!g.boundingSphere) g.computeBoundingSphere();
+    for (const a of Object.values(g.attributes)) {
+      if (a.isInterleavedBufferAttribute) {           // meshopt's padded streams: one buffer behind several attributes
+        const d = a.data; if (!d.array || seen.has(d)) continue;
+        seen.add(d); bytes += d.array.byteLength; d.onUpload(disposeArray); continue;
+      }
+      if (!a.array || seen.has(a)) continue;
+      seen.add(a); bytes += a.array.byteLength; a.onUpload(disposeArray);
+    }
+    if (g.index && g.index.array && !seen.has(g.index)) { seen.add(g.index); bytes += g.index.array.byteLength; g.index.onUpload(disposeArray); }
+  });
+  return bytes;
+}
+function forEachTexture(root, fn) {
+  const seen = new Set();
+  const visit = (t) => { if (t && t.isTexture && !t.isRenderTargetTexture && !seen.has(t)) { seen.add(t); fn(t); } };
+  root.traverse(o => {
+    const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+    for (const m of mats) { for (const k of ['map', 'alphaMap', 'emissiveMap', 'normalMap', 'roughnessMap']) visit(m[k]); if (m.uniforms) for (const u of Object.values(m.uniforms)) visit(u && u.value); }
+  });
+  for (const t of EXTRA_TEXTURES) visit(t);
+}
+const isBitmapImage = (im) => !!im && ((typeof ImageBitmap !== 'undefined' && im instanceof ImageBitmap) || im instanceof HTMLImageElement || im instanceof HTMLCanvasElement);
+function halveTexture(t) {
+  const im = t.image; if (t.isDataTexture || !isBitmapImage(im) || im.width < 2048) return false;
+  const c = document.createElement('canvas'); c.width = im.width >> 1; c.height = im.height >> 1;
+  c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+  if (im.close) im.close();
+  t.image = c; t.needsUpdate = true; return true;
+}
+function halveTextures(root) { let n = 0; forEachTexture(root, t => { if (halveTexture(t)) n++; }); console.info('memory tier: ' + n + ' textures halved'); }
+// after the upload the decoded image is dead weight (a 2048^2 bitmap is
+// 16 MB); keep only its size, which is all three reads without an update
+// Only textures the GPU already holds (renderer.properties knows), never a
+// DataTexture (the wind field re-uploads every frame from image.data) or a
+// canvas texture that may be redrawn. Run again later: a texture first seen
+// from another eye uploads then.
+function releaseImages(root) {
+  let n = 0;
+  forEachTexture(root, t => {
+    const im = t.image;
+    if (t.isDataTexture || t.isCanvasTexture || !isBitmapImage(im)) return;
+    if (!renderer.properties.get(t).__webglTexture) return;
+    if (im.close) im.close();
+    t.image = { width: im.width, height: im.height }; n++;
+  });
+  if (n) console.info('memory: ' + n + ' decoded images released after upload');
+  return n;
+}
 // V233: erictliu.com's door downloads the world while it opens and parks it
 // in the Cache API under this exact URL; if it is there, load it from the
 // blob and skip the second download (the HTTP cache usually hits too, but
@@ -1808,6 +1906,7 @@ const WORLD_URL = (() => {
 const GLB_URL = WORLD_URL || './island_world.glb?v=' + WORLD_TAG + (GLB_CB ? '&cb=' + encodeURIComponent(GLB_CB) : '');
 const GLB_ABS = new URL(GLB_URL, location.href).href;
 window.WORLD_URL = WORLD_URL;
+let WORLD_BLOB = null;   // V240: the door hands the downloaded file over directly; the cache is for next time
 if (EMBED) {
   // the door downloads the world with a progress bar and puts it in the
   // Cache API under GLB_ABS, then says go; if nothing answers (an older
@@ -1815,18 +1914,20 @@ if (EMBED) {
   await new Promise((res) => {
     const t = setTimeout(res, 2500);
     addEventListener('message', function onGo(ev) {
-      if (ev.origin === location.origin && ev.data && ev.data.isola === 'go') { clearTimeout(t); removeEventListener('message', onGo); res(); }
+      if (ev.origin === location.origin && ev.data && ev.data.isola === 'go') { if (ev.data.world instanceof Blob) WORLD_BLOB = ev.data.world; clearTimeout(t); removeEventListener('message', onGo); res(); }
     });
     tellParent({ type: 'hello', glb: GLB_ABS, build: BUILD });
   });
 }
 let glbSrc = GLB_URL;
-try {
+if (WORLD_BLOB) { glbSrc = URL.createObjectURL(WORLD_BLOB); console.info('island_world.glb: handed over by the door'); }
+else try {
   if (window.caches) {
     const hit = await caches.match(GLB_ABS);
     if (hit) { glbSrc = URL.createObjectURL(await hit.blob()); console.info('island_world.glb: from the door\'s cache'); }
   }
 } catch (e) { console.warn('cache lookup failed', e); }
+tellParent({ type: 'stage', stage: 'decoding' });
 loader.load(glbSrc, (gltf) => {
   applyTerrainProfile(gltf.scene,THREE,TERRAIN_PROFILE);
   gltf.scene.traverse((o) => {
@@ -1880,7 +1981,7 @@ loader.load(glbSrc, (gltf) => {
         // into the reflection by a distance that grows with the camera range,
         // producing a muddy halo around the island when zoomed out.
         clipBias: 0.0,
-        textureWidth: 1024, textureHeight: 1024,
+        textureWidth: MEMORY_TIER ? 512 : 1024, textureHeight: MEMORY_TIER ? 512 : 1024,
         color: 0xffffff,
       });
       // RGBA8 fallback (ported from the Codex pass): the Reflector target
@@ -2333,6 +2434,7 @@ loader.load(glbSrc, (gltf) => {
       const tg = table && (table.geometry || table.children[0]?.geometry);
       if (!tg) { console.warn('meadow repack: no WEB_meadow_table'); return; }
       const g = o.geometry, ex = g.userData || {};   // three puts primitive extras on the geometry
+      tellParent({ type: 'stage', stage: 'expanding' });
       const patterns = ex.patterns || [];
       const T = { root: tg.attributes.position, col: tg.attributes.color || null, ph: tg.attributes._phase, cnt: tg.attributes._count, pat: tg.attributes._pattern };
       const hasVertexColour = !!g.attributes.color;                 // V234 final layout: the gradient ships per vertex
@@ -2390,7 +2492,7 @@ loader.load(glbSrc, (gltf) => {
       g.setAttribute('_phase', new THREE.BufferAttribute(phase, 1, true));
       g.setIndex(new THREE.BufferAttribute(index, 1));
       g.userData.bladeChunks = chunks; g.userData.bladeRestBaked = true;
-      table.visible = false; table.traverse(c => { c.visible = false; });
+      table.removeFromParent(); tg.dispose();           // V240: its streams are expanded; nothing reads it again
       console.info(`meadow repack: ${nb} blades, ${nv} verts, ${ntri} tris, ${patterns.length} patterns, ${chunks.length} chunks expanded in ${(performance.now() - t0).toFixed(0)} ms`);
       o.updateWorldMatrix(true, false);
       const sc = new THREE.Vector3(); o.matrixWorld.decompose(new THREE.Vector3(), new THREE.Quaternion(), sc);
@@ -2683,12 +2785,28 @@ loader.load(glbSrc, (gltf) => {
   window.PHYS = { Wind, Grass, Tree, Cloth };
   // live sun is the default mode - apply it once the world exists
   $('c-light').dispatchEvent(new Event('change'));
-  const el = document.getElementById('loading');
-  el.style.opacity = 0;
-  setTimeout(() => el.remove(), 700);
-  tellParent({ type: 'ready' });
-  TIER.readyAt = performance.now();
-  if (Q.get('tier') === 'phone') for (const st of TIER.ladder) tierApply(st);
+  if (MEMORY_TIER) halveTextures(scene);
+  const freed = releaseCpuCopies(scene, new Set([Cloth.mesh && Cloth.mesh.geometry]));
+  console.info(`memory: ${(freed / 1048576).toFixed(0)} MB of CPU geometry copies released after upload`);
+  // V240: warm the shaders and uploads BEFORE saying ready, so the door
+  // opens onto frames that already run at speed (the first frames after a
+  // load cost 100+ ms each - a stutter right through the fade)
+  (async () => {
+    tellParent({ type: 'stage', stage: 'warming' });
+    let ms = 1e9;
+    for (let i = 0; i < 12 && !(i >= 3 && ms < 25); i++) {
+      const a = performance.now(); drawFrame(); ms = performance.now() - a;
+      await new Promise(r => setTimeout(r, 0));
+    }
+    releaseImages(scene);
+    setTimeout(() => releaseImages(scene), 15000);   // whatever another eye has uploaded since
+    const el = document.getElementById('loading');
+    el.style.opacity = 0;
+    setTimeout(() => el.remove(), 700);
+    tellParent({ type: 'ready' });
+    TIER.readyAt = performance.now();
+    if (Q.get('tier') === 'phone') for (const st of TIER.ladder) tierApply(st);
+  })();
 }, (ev) => {
   if (ev.total) {
     document.getElementById('loading').textContent =
@@ -2708,6 +2826,7 @@ function isEditingControl(target) {
 }
 addEventListener('keydown', (e) => {
   if (e.metaKey || e.ctrlKey || e.altKey || isEditingControl(e.target)) return;
+  if (e.key === 'Escape') { if (HOVER.on && !HOVER.locked) setLooking(false); return; }   // (a held mouse: the browser frees it first, pointerlockchange follows)
   const key = e.key.toLowerCase();
   if (key === 'h') { restoreHero(); return; }          // the painting's exact pose (V207: the default is pulled back)
   if (!movementKeys.has(key)) return;
@@ -2767,6 +2886,7 @@ addEventListener('resize', () => {
   camera.fov = FLY.fov0 = heroFov(camera.aspect);   // the framing rule follows the window
   camera.updateProjectionMatrix();
   applyHorizon();
+  renderer.setPixelRatio(fitDpr(DPR));
   renderer.setSize(innerWidth, innerHeight);
 });
 
@@ -2970,7 +3090,7 @@ const kuwFast = (() => { const gl = renderer.getContext();
 if (!kuwFast) console.warn('post: no float colour buffers - Kuwahara keeps the 100-tap loop');
 
 function sizePost() {
-  const dpr = DPR;
+  const dpr = renderer.getPixelRatio();
   rt.setSize(innerWidth * dpr, innerHeight * dpr);
   kuwH.setSize(innerWidth * dpr, innerHeight * dpr);
   kuwV.setSize(innerWidth * dpr, innerHeight * dpr);

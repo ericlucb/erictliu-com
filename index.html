@@ -118,7 +118,7 @@
   /* The door to Isola Quieta (ENTER). Nothing loads until the click; then
      the link becomes a small door with a ring that fills with the real
      download, the door swings open, and the world fades in over the page. */
-  #kEnter { display:inline-grid; place-items:center; }
+  #kEnter { display:inline-grid; place-items:center; position:relative; }
   #kEnter.kLoading { pointer-events:none; }
   #kEnter svg.kDoorIcon { width:clamp(46px, 4.2vw, 64px); height:auto; display:block; overflow:visible; }
   #kEnter .kRing { fill:none; stroke:currentColor; stroke-width:2; opacity:.22; }
@@ -127,12 +127,12 @@
   #kEnter.kOpen .kLeafI { transform:scaleX(.12) skewY(-12deg); }
   #kEnter .kGlow { opacity:0; transition:opacity .7s; }
   #kEnter.kOpen .kGlow { opacity:1; }
-  #kEnter.kWait .kRingFill { animation:kSpin 1.1s linear infinite; }
-  @keyframes kSpin { to { transform:rotate(270deg); } }
+  #kEnter .kPct { position:absolute; left:50%; top:100%; transform:translate(-50%, 4px); font:clamp(10px, min(0.9vw, 1.7vh), 13px)/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing:.12em; font-variant-numeric:tabular-nums; opacity:.75; white-space:nowrap; transition:opacity .5s; }
+  #kEnter.kOpen .kPct { opacity:0; }
   #kDoor { position:fixed; inset:0; z-index:40; background:#5d5f7e; opacity:0; transition:opacity 1.1s ease .45s; }
   #kDoor.open { opacity:1; }
   #kDoor iframe { position:absolute; inset:0; width:100%; height:100%; border:0; background:#5d5f7e; }
-  @media (prefers-reduced-motion: reduce) { #kEnter .kLeafI, #kDoor { transition-duration:.3s; } #kEnter.kWait .kRingFill { animation:none; } }
+  @media (prefers-reduced-motion: reduce) { #kEnter .kLeafI, #kDoor { transition-duration:.3s; } }
 </style>
 </helmet>
 <div id="kStage" style="--pw:min(60vw, 114vh, (100vh - 230px) * 1.33); --pk:1; --mr:calc(min(9vw, 128px) + clamp(0px, (100vw - 1100px) * 0.34, 140px)); position:fixed; inset:0; background:#fbfbfa; display:grid; place-items:center; overflow:hidden; touch-action:none; cursor:default;">
@@ -440,16 +440,27 @@ class Component extends DCLogic {
     const en = document.getElementById('kEnter'); if (!en) return;
     const ink = (this.theme && this.theme.ink) || '#141414', bg = (this.theme && this.theme.bg) || '#fbfbfa';
     const C = (2 * Math.PI * 29).toFixed(2);
-    en.classList.add('kLoading', 'kWait'); en.setAttribute('aria-busy', 'true'); en.style.color = ink;
+    en.classList.add('kLoading'); en.setAttribute('aria-busy', 'true'); en.style.color = ink;
     en.innerHTML = '<svg class="kDoorIcon" viewBox="0 0 64 64" role="img" aria-label="Opening the door to the island">'
       + '<circle class="kRing" cx="32" cy="32" r="29"></circle>'
       + '<circle class="kRingFill" cx="32" cy="32" r="29" stroke-dasharray="' + C + '" stroke-dashoffset="' + (C * 0.92).toFixed(2) + '"></circle>'
       + '<rect class="kGlow" x="22" y="16" width="20" height="32" fill="#f4cf95"></rect>'
       + '<g class="kLeafI"><rect x="22" y="16" width="20" height="32" fill="currentColor"></rect><circle cx="37.5" cy="32.5" r="1.5" fill="' + bg + '"></circle></g>'
       + '<rect x="20" y="14" width="24" height="36" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"></rect>'
-      + '</svg>';
-    const ring = en.querySelector('.kRingFill');
-    const setBar = (f) => { en.classList.remove('kWait'); ring.style.strokeDashoffset = (C * (1 - Math.max(0, Math.min(1, f)))).toFixed(2); };
+      + '</svg><span class="kPct" aria-live="polite">0%</span>';
+    const ring = en.querySelector('.kRingFill'), pct = en.querySelector('.kPct');
+    // ONE ring, 0 to 100, never spinning (Eric: 'it should just be loading
+    // throughout ... and give a loading percentage'). The download owns
+    // 2-80 % by bytes; the viewer's stages after it (decoding the file,
+    // expanding the meadow, warming the shaders) each get a ceiling the
+    // ring creeps toward on a timer, so it keeps moving while work that
+    // has no byte count runs; 'ready' is 100.
+    let shown = 0, target = 0.02, creep = null;
+    const paint = (f) => { shown = f; ring.style.strokeDashoffset = (C * (1 - Math.max(0, Math.min(1, f)))).toFixed(2); pct.textContent = Math.round(f * 100) + '%'; };
+    const setBar = (f) => { target = Math.max(target, f); paint(target); };
+    const creepTo = (ceiling) => { target = Math.max(target, shown); const cap = ceiling; if (creep) clearInterval(creep);
+      creep = setInterval(() => { if (shown >= cap - 0.0005) { clearInterval(creep); creep = null; return; } paint(shown + (cap - shown) * 0.08); }, 120); };
+    paint(0.02);
     const d = document.createElement('div'); d.id = 'kDoor';
     d.innerHTML = '<iframe id="kWorld" title="Isola Quieta" allow="fullscreen; pointer-lock"></iframe>';
     document.body.appendChild(d);
@@ -458,7 +469,8 @@ class Component extends DCLogic {
     let opened = false, heard = false;
     const open = () => {
       if (opened) return; opened = true;
-      setBar(1); en.classList.add('kOpen');
+      if (creep) { clearInterval(creep); creep = null; }
+      paint(1); en.classList.add('kOpen');
       setTimeout(() => {
         d.classList.add('open');
         cancelAnimationFrame(this.raf);            // the portrait rests while the world runs
@@ -468,7 +480,8 @@ class Component extends DCLogic {
     };
     const fail = (msg) => {
       console.warn('door:', msg);
-      en.classList.remove('kLoading', 'kWait', 'kOpen'); en.removeAttribute('aria-busy'); en.style.color = '';
+      if (creep) { clearInterval(creep); creep = null; }
+      en.classList.remove('kLoading', 'kOpen'); en.removeAttribute('aria-busy'); en.style.color = '';
       en.textContent = 'COULD NOT OPEN';
       setTimeout(() => this.closeDoor(), 2500);   // (pops the history entry, which closes)
     };
@@ -478,21 +491,27 @@ class Component extends DCLogic {
       if (!res.ok || !res.body) throw new Error('world fetch ' + res.status);
       const total = +res.headers.get('content-length') || 0;
       const reader = res.body.getReader(), chunks = []; let got = 0;
-      for (;;) { const { done, value } = await reader.read(); if (done) break; chunks.push(value); got += value.length; if (total) setBar(got / total); }
+      for (;;) { const { done, value } = await reader.read(); if (done) break; chunks.push(value); got += value.length; if (total) setBar(0.02 + 0.78 * got / total); }
       const blob = new Blob(chunks, { type: 'model/gltf-binary' });
-      const c = await caches.open('isola-world');
-      await c.put(url, new Response(blob, { headers: { 'Content-Type': 'model/gltf-binary', 'Content-Length': String(blob.size) } }));
-      for (const k of await c.keys()) if (k.url !== url) await c.delete(k);   // one world in the cache, not one per version
+      chunks.length = 0;
+      try {   // for the next visit; a phone's quota or private mode may refuse, and the hand-off below does not depend on it
+        const c = await caches.open('isola-world');
+        await c.put(url, new Response(blob, { headers: { 'Content-Type': 'model/gltf-binary', 'Content-Length': String(blob.size) } }));
+        for (const k of await c.keys()) if (k.url !== url) await c.delete(k);   // one world in the cache, not one per version
+      } catch (e) { console.warn('door: could not cache the world', e); }
+      return blob;
     };
     this.onDoorMsg = async (ev) => {
       if (ev.origin !== location.origin || !ev.data || ev.data.isola !== 'v1' || ev.source !== frame.contentWindow) return;
       const m = ev.data;
       if (m.type === 'hello') {
         heard = true;
-        try { if (window.caches) await fetchWorld(m.glb); } catch (e) { console.warn('door: the viewer will download the world itself', e); }
-        frame.contentWindow.postMessage({ isola: 'go' }, location.origin);
-        setBar(1); en.classList.add('kWait');        // decoding: the ring spins full until ready
-      } else if (m.type === 'progress') { if (m.total) setBar(m.loaded / m.total); }
+        let world = null;
+        try { world = await fetchWorld(m.glb); } catch (e) { console.warn('door: the viewer will download the world itself', e); }
+        frame.contentWindow.postMessage(world ? { isola: 'go', world } : { isola: 'go' }, location.origin);
+        if (world) { setBar(0.80); creepTo(0.88); }   // decoding starts; the viewer's stages take it from here
+      } else if (m.type === 'progress') { if (m.total) setBar(0.02 + 0.78 * m.loaded / m.total); }
+      else if (m.type === 'stage') { const ceil = { decoding: 0.88, expanding: 0.95, warming: 0.99 }[m.stage]; if (ceil) { setBar(Math.min(ceil - 0.06, Math.max(shown, 0.80))); creepTo(ceil); } }
       else if (m.type === 'ready') open();
       else if (m.type === 'error') fail(m.message || 'the island could not load');
     };
@@ -512,7 +531,7 @@ class Component extends DCLogic {
     removeEventListener('message', this.onDoorMsg); removeEventListener('popstate', this.onDoorPop);
     this.door.remove(); this.door = null;
     const en = document.getElementById('kEnter');
-    if (en) { en.classList.remove('kLoading', 'kWait', 'kOpen'); en.removeAttribute('aria-busy'); en.style.color = ''; en.textContent = 'ENTER'; }
+    if (en) { en.classList.remove('kLoading', 'kOpen'); en.removeAttribute('aria-busy'); en.style.color = ''; en.textContent = 'ENTER'; }
     this._t = performance.now() - 16.7;
     this.raf = requestAnimationFrame(this.loop);
   }
