@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <title>Isola Quieta — live world</title>
 <style>
   html, body { margin: 0; height: 100%; overflow: hidden; background: #5d5f7e; }
@@ -29,6 +29,29 @@
   .move-keys kbd:nth-child(2) { grid-column: 1; }
   .move-keys kbd.held { background: rgba(244,239,227,.36); }
   @media (prefers-reduced-motion: reduce) { #hud { transition: opacity .2s; } }
+  /* V237 - TOUCH ('work on mobile too'): the canvas owns every touch (no
+     scroll, no pinch-zoom, no double-tap zoom), one finger looks, a thumb
+     stick at the bottom-left moves. body.touch is set by the media query
+     or by the first touch pointer, whichever comes first. */
+  #app { touch-action: none; }
+  body { overscroll-behavior: none; -webkit-user-select: none; user-select: none; }
+  #stick {
+    position: fixed; display: none; width: 112px; height: 112px; border-radius: 50%;
+    left: calc(22px + env(safe-area-inset-left, 0px)); bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+    touch-action: none; opacity: .78; transition: opacity .5s;
+  }
+  body.touch #stick { display: block; }
+  #stick .base { position: absolute; inset: 0; border-radius: 50%;
+    border: 1px solid rgba(244,239,227,.5); background: rgba(35,43,51,.22); backdrop-filter: blur(4px); }
+  #stick .knob { position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; margin: -23px 0 0 -23px;
+    border-radius: 50%; background: rgba(244,239,227,.55); box-shadow: 0 1px 6px rgba(20,20,40,.35);
+    transition: transform .12s ease-out; }
+  #stick.live .knob { transition: none; background: rgba(244,239,227,.8); }
+  #stick .lbl { position: absolute; left: 0; right: 0; bottom: -20px; text-align: center; color: #f4efe3;
+    font: 11px/1 -apple-system, "SF Pro Text", sans-serif; letter-spacing: .08em; text-shadow: 0 1px 4px rgba(20,20,40,.4); }
+  body.touch #hud { left: 50%; top: 42%; }   /* in the sky above the island, not over it */
+  body.touch #hud .hint-row:first-child { display: none; }
+  body.touch .look-gesture svg rect, body.touch .look-gesture svg path:nth-of-type(1), body.touch .look-gesture svg path:nth-of-type(2) { display: none; }   /* the arrows stay, the mouse goes */
   #fps {
     display: none;
     position: fixed; right: 14px; top: 12px; color: #efe9dc;
@@ -89,6 +112,7 @@
   </span><span>drag to look</span></span>
 </div>
 <div id="fps"></div>
+<div id="stick" aria-label="Move stick"><div class="base"></div><div class="knob"></div><div class="lbl">move</div></div>
 <details id="panel" class="hud-panel">
   <summary>look</summary>
   <div class="row"><label>painterly</label><input id="c-on" type="checkbox" checked></div>
@@ -132,7 +156,7 @@ import { bakeWorldTransform } from './bake-world-transform.js';
 
 // cache-buster: one label per build, so a reload re-uses the cached 117 MB
 // GLB instead of fetching it again (v115 stamped the clock on every load)
-const BUILD = 'v234';
+const BUILD = 'v237';
 // ?dev=1 shows the full LOOK panel (cameras, review views, painterly dials);
 // visitors get only the settings control (V207)
 const DEV = new URLSearchParams(location.search).has('dev');
@@ -199,7 +223,18 @@ const renderer = new THREE.WebGLRenderer({
 });
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+// V237 - ONE CODEBASE, TIERED BY A TIMED FRAME (never by user agent). The
+// renderer starts at the device's own pixel ratio (capped at 2, as always);
+// once the world is up, a running median of the loop's frame interval
+// above 30 ms steps down a ladder: pixel ratio 1.5, 1.25, 1.0, then the
+// water's mirror to 512, then the shadow map to 2048. A desktop that holds
+// 60 fps never moves and draws exactly what it drew before. ?dpr=1.25 pins
+// the ratio, ?tier=phone applies the whole ladder at load (to compare on a
+// phone), ?tier=full and ?capture=1 switch the ladder off (the harness).
+const Q = new URLSearchParams(location.search);
+const DPR_MAX = Math.min(devicePixelRatio, 2);
+let DPR = Q.get('dpr') ? Math.max(0.5, Math.min(+Q.get('dpr') || DPR_MAX, DPR_MAX)) : DPR_MAX;
+renderer.setPixelRatio(DPR);
 renderer.setSize(innerWidth, innerHeight);
 renderer.toneMapping = THREE.NoToneMapping;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -356,10 +391,15 @@ const skyClouds = [];
 // painting's 2.4:1 (v115 rounded it to 23.5, a 0.16 % scale error against
 // every Blender render); a narrower window keeps that horizontal field and
 // opens the vertical fov instead (16:9 -> 31.4 deg, the whole island in
-// frame), clamped at 1.6:1 so portrait does not open to 116 deg (Codex's
-// rule, refuted: it shrank the painting to 0.68x at 2.4:1).
+// frame), clamped so portrait does not open to 116 deg (Codex's rule,
+// refuted: it shrank the painting to 0.68x at 2.4:1). The clamp was 1.6:1;
+// V237 ('work on mobile too') lowers it to 1:1 - a portrait phone at 1.6
+// showed a 16 deg horizontal field with the island falling off the right
+// edge; at 1:1 the lens is 53 deg vertical (a phone's own wide camera) and
+// the default eye frames the island at ~80 % of the width. Nothing wider
+// than 1.6:1 changes; a 4:3 desktop window opens from 35 to 41 deg.
 const HERO_TAN_HALF_W = 18 / 36;   // tan of half the painting's horizontal field: half the sensor over the lens
-function heroFov(a) { return 2 * Math.atan(HERO_TAN_HALF_W / Math.min(Math.max(a, 1.6), 2.4)) * 180 / Math.PI; }
+function heroFov(a) { return 2 * Math.atan(HERO_TAN_HALF_W / Math.min(Math.max(a, 1.0), 2.4)) * 180 / Math.PI; }
 console.assert(Math.abs(heroFov(2.4) - 23.5366) < 1e-3, 'heroFov(2.4) must be the hero lens, 36 mm on 36 mm at 2.4:1');
 const camera = new THREE.PerspectiveCamera(heroFov(innerWidth / innerHeight), innerWidth / innerHeight, 1.5, 6000);
 // PAINTER'S HORIZON ('bring the horizon lower - see the real example'):
@@ -383,9 +423,13 @@ const HERO_SHIFT_X = -0.135;          // fraction of frame WIDTH
 // attached (reference/hero-wide.jpg: hero.webp sits inside it at scale
 // 0.8965, x0 ~1431), whose shift works out to -0.2068 at 3.556:1. Ramp
 // between the two; at and below 2.4 the calibrated -0.135 is untouched.
+// V237: below 1.6:1 the open water on the left has no room - the shift ramps
+// to zero at 1:1 so a portrait phone centres the island instead of pushing
+// it off the right edge (13.5 % of a 375 px frame is 51 px).
 function heroShiftX(a) {
   const t = Math.min(Math.max((a - 2.4) / (5120 / 1440 - 2.4), 0), 1);
-  return HERO_SHIFT_X + t * (-0.2068 - HERO_SHIFT_X);
+  const narrow = Math.min(Math.max((a - 1.0) / 0.6, 0), 1);
+  return (HERO_SHIFT_X + t * (-0.2068 - HERO_SHIFT_X)) * narrow;
 }
 function applyHorizon() {
   camera.setViewOffset(innerWidth, innerHeight,
@@ -412,6 +456,7 @@ controls.maxDistance = 320;      // 'shouldn't zoom all the way out' (2026-09-02
 controls.maxPolarAngle = Math.PI * 0.495;
 let autorotate = false;
 
+const moveHint = document.getElementById('hud');
 // Quiet flight: level horizon, steady lens, responsive easing and WASD only.
 // Drag-to-look supplies direction; forward/backward follow the viewing ray.
 const FLY = { on: true, vel: new THREE.Vector3(), yaw: 0, pitch: 0, roll: 0,
@@ -486,19 +531,62 @@ function restoreDefault() {
   controls.target.copy(HERO_TARGET);
 }
 window.restoreDefault = restoreDefault;
+// V237 - TOUCH. A touch-first device (no hover, coarse pointer) or the first
+// touch pointer turns on body.touch: the thumb stick appears and the WASD
+// hint goes. The look drag is bound to ONE pointer id, so the stick's finger
+// and a second finger never steer it.
+const TOUCH = matchMedia('(hover: none) and (pointer: coarse)').matches;
+const MOVE = { f: 0, r: 0 };                 // the stick: forward / right in [-1, 1]
+function enableTouch() {
+  if (document.body.classList.contains('touch')) return;
+  document.body.classList.add('touch');
+  moveHint.setAttribute('aria-label', 'Drag to look around. Use the stick to move.');
+}
 renderer.domElement.addEventListener('pointerdown', (e) => {
   if (!FLY.on || e.button > 1) return;
-  FLY.drag = true; FLY.lastX = e.clientX; FLY.lastY = e.clientY;
+  if (e.pointerType === 'touch') enableTouch();
+  if (FLY.drag) return;                      // one finger looks; another is ignored
+  FLY.drag = true; FLY.dragId = e.pointerId; FLY.lastX = e.clientX; FLY.lastY = e.clientY;
   try { renderer.domElement.setPointerCapture(e.pointerId); } catch (_) {}
 });
 addEventListener('pointermove', (e) => {
-  if (!FLY.on || !FLY.drag) return;
-  FLY.lookX -= (e.clientX - FLY.lastX) * 0.0016;   // was 0.0028 - 'moves way too much'
-  FLY.lookY -= (e.clientY - FLY.lastY) * 0.0016;
+  if (!FLY.on || !FLY.drag || e.pointerId !== FLY.dragId) return;
+  const sens = e.pointerType === 'touch' ? 0.0030 : 0.0016;   // mouse: was 0.0028 - 'moves way too much'; a thumb travels less
+  FLY.lookX -= (e.clientX - FLY.lastX) * sens;
+  FLY.lookY -= (e.clientY - FLY.lastY) * sens;
   FLY.lastX = e.clientX; FLY.lastY = e.clientY;
 });
-addEventListener('pointerup', () => { FLY.drag = false; });
-addEventListener('pointercancel', () => { FLY.drag = false; });
+addEventListener('pointerup', (e) => { if (e.pointerId === FLY.dragId) FLY.drag = false; });
+addEventListener('pointercancel', (e) => { if (e.pointerId === FLY.dragId) FLY.drag = false; });
+// the thumb stick: its own pointer, captured; magnitude past a 12 % dead
+// zone is the speed, direction is forward/right in the camera's frame
+const stickEl = document.getElementById('stick'), stickKnob = stickEl.querySelector('.knob');
+const STICK = { id: -1, cx: 0, cy: 0, R: 40 };
+function stickMove(e) {
+  const dx = e.clientX - STICK.cx, dy = e.clientY - STICK.cy, d = Math.hypot(dx, dy);
+  const m = Math.min(d / STICK.R, 1), ux = d > 0 ? dx / d : 0, uy = d > 0 ? dy / d : 0;
+  const a = m < 0.12 ? 0 : (m - 0.12) / 0.88;
+  MOVE.r = ux * a; MOVE.f = -uy * a;
+  stickKnob.style.transform = `translate(${(ux * m * STICK.R).toFixed(1)}px, ${(uy * m * STICK.R).toFixed(1)}px)`;
+}
+function stickEnd(e) {
+  if (e && e.pointerId !== STICK.id) return;
+  STICK.id = -1; MOVE.f = MOVE.r = 0; stickEl.classList.remove('live'); stickKnob.style.transform = '';
+}
+stickEl.addEventListener('pointerdown', (e) => {
+  if (STICK.id >= 0) return;
+  enableTouch();
+  const b = stickEl.getBoundingClientRect(); STICK.cx = b.left + b.width / 2; STICK.cy = b.top + b.height / 2;
+  STICK.id = e.pointerId; stickEl.classList.add('live');
+  try { stickEl.setPointerCapture(e.pointerId); } catch (_) {}
+  stickMove(e); e.preventDefault();
+});
+stickEl.addEventListener('pointermove', (e) => { if (e.pointerId === STICK.id) stickMove(e); });
+stickEl.addEventListener('pointerup', stickEnd);
+stickEl.addEventListener('pointercancel', stickEnd);
+stickEl.addEventListener('lostpointercapture', stickEnd);
+if (TOUCH) enableTouch();
+window.MOVE = MOVE;                          // the harness drives the stick's numbers directly
 function fly(dt) {
   const k = 1 - Math.exp(-dt * 14);                       // look smoothing
   const ax = FLY.lookX * k, ay = FLY.lookY * k;
@@ -511,9 +599,10 @@ function fly(dt) {
   const want = _mv.set(0, 0, 0);
   if (KEYS.w) want.add(fwd);  if (KEYS.s) want.sub(fwd);
   if (KEYS.d) want.add(rgt);  if (KEYS.a) want.sub(rgt);
+  if (MOVE.f || MOVE.r) want.addScaledVector(fwd, MOVE.f).addScaledVector(rgt, MOVE.r);   // V237: the stick, analog
   const moving = want.lengthSq() > 0;
   const vmax = 18;                                        // V219: 'a little too slow' at 12
-  if (moving) want.normalize().multiplyScalar(vmax);
+  if (moving) { const L = want.length(); want.multiplyScalar(vmax * Math.min(L, 1) / L); }
   // Gentle pickup, short controlled release: no drifting past a detail.
   const acc = moving ? 4.0 : 6.0;
   if (moving) {
@@ -967,6 +1056,58 @@ const SHADOW = { map: { value: null }, matrix: { value: new THREE.Matrix4() },
 const MIRROR = { value: 0 };
 // V218: 1 = blade LOD on; window.LOD_OFF = true switches it off for A/B checks
 const LOD = { value: 1 };
+// V236: the share of blades drawn into the water's mirror (1 = every blade
+// the main pass draws). window.MIRROR_KEEP sets it for A/B measurement.
+const MIRROR_KEEP = { value: 1 };
+// V236 - LOD BY DRAW RANGE. The blade LOD (V218) collapses a dropped blade in
+// the VERTEX shader, so the GPU still transforms every one of the meadow's
+// 3.4 M vertices through the wind shader; measured at the hero, drawing 10 %
+// of the blades into the mirror cost the same as drawing all of them. The
+// loader now writes each chunk's index with its blades in ascending r1 (the
+// random the shader tests against `keep`), so the blades a pass keeps are a
+// PREFIX of the chunk's index: per pass, per chunk, the draw range ends at
+// the last blade with r1 <= keep(nearest point of the chunk). Every blade
+// the shader would draw is drawn, every blade skipped would have collapsed
+// to a point - the pixels are the same, the vertex work is not.
+// window.LOD_RANGE_OFF = true draws the full index again for A/B checks.
+const TIER = { on: !Q.has('capture') && Q.get('tier') !== 'full' && !Q.get('dpr'), readyAt: 0, dts: [], lastStep: 0, step: 0, applied: [],
+               ladder: [{ dpr: 1.5 }, { dpr: 1.25 }, { dpr: 1.0 }, { mirror: 512 }, { shadow: 2048 }] };
+function applyDpr(v) { DPR = v; renderer.setPixelRatio(DPR); renderer.setSize(innerWidth, innerHeight); sizePost(); }
+function tierApply(st) {
+  if (st.dpr !== undefined) { if (st.dpr >= DPR) return false; applyDpr(st.dpr); }
+  if (st.mirror) { if (!seaMesh) return false; seaMesh.getRenderTarget().setSize(st.mirror, st.mirror); }
+  if (st.shadow) window.SHADOW_FORCE = st.shadow;
+  TIER.applied.push(st); console.info('tier: ' + JSON.stringify(st) + ' (frame interval median over 30 ms)');
+  return true;
+}
+function tierStep(rawMs, now) {          // called every loop frame once the world is up
+  if (rawMs < 200) TIER.dts.push(rawMs); // a tab switch is not a slow frame
+  if (TIER.dts.length < 120) return;
+  const a = TIER.dts.slice().sort((x, y) => x - y), med = a[a.length >> 1]; TIER.dts.length = 0;
+  if (med <= 30 || now - TIER.lastStep < 4000) return;
+  while (TIER.step < TIER.ladder.length) { if (tierApply(TIER.ladder[TIER.step++])) { TIER.lastStep = now; break; } }
+}
+window.TIER = TIER; window.applyDpr = applyDpr;
+const BLADE_LOD = [];                 // [{ mesh, c }] - c.lodR1 sorted, c.lodEnd = index end per blade
+function bladeKeepAt(d) {             // the shader's keep(lodDist) with uLod = 1
+  const t = Math.min(Math.max((d - 45) / 65, 0), 1);
+  return 1 - 0.75 * t * t * (3 - 2 * t);
+}
+function applyBladeLod(cap) {
+  if (!BLADE_LOD.length) return;
+  const full = window.LOD_RANGE_OFF || LOD.value < 0.5 && cap >= 1;
+  const cx = camera.position.x, cz = camera.position.z;   // the mirror camera shares the eye's xz
+  for (const { mesh, c } of BLADE_LOD) {
+    const r1 = c.lodR1, nb = r1.length;
+    let n = nb;
+    if (!full) {
+      const dx = Math.max(c.min[0] - cx, 0, cx - c.max[0]), dz = Math.max(c.min[2] - cz, 0, cz - c.max[2]);
+      const kmax = Math.min(LOD.value < 0.5 ? 1 : bladeKeepAt(Math.hypot(dx, dz)), cap) + 3e-5;   // + a float32 ulp margin
+      if (kmax < 1) { let lo = 0, hi = nb; while (lo < hi) { const m = (lo + hi) >> 1; if (r1[m] > kmax) hi = m; else lo = m + 1; } n = lo; }
+    }
+    mesh.geometry.setDrawRange(0, n ? c.lodEnd[n - 1] : 0);
+  }
+}
 // V224 (Eric: 'there shouldn't be these weird random branches that look
 // stripped'): the tree model carries twig brooms that never had leaves, and
 // the crown mask exposes more of them at the fringe. At load, every bark
@@ -1043,6 +1184,7 @@ const WIND_GLSL = `
   uniform float uWt;
   uniform float uMirror;
   uniform float uLod;
+  uniform float uMirrorKeep;   // V236: blade share in the mirror pass
   uniform vec4 uStepC;      // V221: step footprint centre.xz, axis.xz
   uniform vec2 uStepHalf;
   uniform sampler2D uGrassTex;
@@ -1073,6 +1215,7 @@ function windify(material, kind, hasHeight = false, scl = [1, 1, 1], hasPhase = 
     sh.uniforms.uWt = WIND.t;
     sh.uniforms.uMirror = MIRROR;
     sh.uniforms.uLod = LOD;
+    sh.uniforms.uMirrorKeep = MIRROR_KEEP;
     sh.uniforms.uStepC = STEP.c; sh.uniforms.uStepHalf = STEP.half;
     // V215: blades never use their normal (unlit, no shadow cast); forcing
     // the normal path made 3.4 M vertices fetch and transform one for nothing
@@ -1275,6 +1418,10 @@ function windify(material, kind, hasHeight = false, scl = [1, 1, 1], hasPhase = 
                  // zero area, no raster cost, no shadow (blades cast none).
                  float lodDist = length(cameraPosition.xz - _root);
                  float keep = mix(1.0, mix(1.0, 0.25, smoothstep(45.0, 110.0, lodDist)), uLod);
+                 // V236: in the mirror pass the blades are a fraction of a texel
+                 // (a 1024^2 target over the whole frame); the same widening
+                 // keeps the coverage with fewer of them
+                 if (uMirror > 0.5) keep = min(keep, uMirrorKeep);
                  if (r1 > keep) transformed.xyz = vec3(0.0, -1.0e4, 0.0);
                  // V221 (Eric: 'there shouldn't be grass underneath the front
                  // door step moving around'): a blade rooted under the step's
@@ -1485,7 +1632,7 @@ function bakeBladeRest(o, points, sc) {
 function splitBladeChunks(o) {
   const chunks = o.geometry.userData.bladeChunks;
   const idx = o.geometry.index;
-  if (!chunks || chunks.length < 2 || !idx) return;
+  if (!chunks || chunks.length < 2 || !idx) return [o];
   const g0 = o.geometry, pos = g0.attributes.position, ia = idx.array, v = new THREE.Vector3();
   const geoms = chunks.map(c => {
     const g = new THREE.BufferGeometry();
@@ -1504,15 +1651,17 @@ function splitBladeChunks(o) {
     return g;
   });
   o.geometry = geoms[0];
+  const meshes = [o];
   for (let i = 1; i < geoms.length; i++) {
     const m = new THREE.Mesh(geoms[i], o.material);
     m.name = o.name + '_c' + i; m.userData = o.userData;
     m.castShadow = o.castShadow; m.receiveShadow = o.receiveShadow;
     o.parent.add(m);
     m.position.copy(o.position); m.quaternion.copy(o.quaternion); m.scale.copy(o.scale);
-    worldMeshes.push(m);
+    worldMeshes.push(m); meshes.push(m);
   }
   console.info(`blades: split into ${geoms.length} frustum-culled chunks`);
+  return meshes;
 }
 // Bake a GLB node's transform into its geometry so local IS world (metres)
 // and modelMatrix is the identity - what windify's tree branch assumes (it
@@ -1896,7 +2045,7 @@ loader.load(glbSrc, (gltf) => {
         }`;
       // V217: flag the mirror pass for the blade shader (see MIRROR)
       { const seaRender = sea.onBeforeRender;
-        sea.onBeforeRender = function (...a) { MIRROR.value = 1; try { seaRender.apply(this, a); } finally { MIRROR.value = 0; } }; }
+        sea.onBeforeRender = function (...a) { MIRROR.value = 1; applyBladeLod(MIRROR_KEEP.value); try { seaRender.apply(this, a); } finally { MIRROR.value = 0; applyBladeLod(1); } }; }
       scene.add(sea);
       seaMesh = sea;
       o.visible = false;
@@ -2101,7 +2250,7 @@ loader.load(glbSrc, (gltf) => {
       let ntri = 0; for (let b = 0; b < nb; b++) ntri += trisPer[T.pat.getX(b)] || 0;
       const index = new Uint32Array(ntri * 3);
       let v = 0, k = 0;
-      const vstart = new Uint32Array(nb + 1);
+      const vstart = new Uint32Array(nb + 1), bph = new Uint16Array(nb);
       for (let b = 0; b < nb; b++) {
         rv.fromBufferAttribute(T.root, b).applyMatrix4(TM);
         const c = T.cnt.getX(b), rx = rv.x, ry = rv.y, rz = rv.z;
@@ -2109,15 +2258,34 @@ loader.load(glbSrc, (gltf) => {
         // hands them over as interleaved attributes: read through getX, never
         // the raw array; getX denormalises, so scale back to the byte / short)
         const ph = Math.round(T.ph.getX(b) * 65535);
-        vstart[b] = v;
+        vstart[b] = v; bph[b] = ph;
         for (let j = 0; j < c; j++) { root3[(v + j) * 3] = rx; root3[(v + j) * 3 + 1] = ry; root3[(v + j) * 3 + 2] = rz; phase[v + j] = ph; }
         if (color) { const c0 = Math.round(T.col.getX(b) * 255), c1 = Math.round(T.col.getY(b) * 255), c2 = Math.round(T.col.getZ(b) * 255); for (let j = 0; j < c; j++) { color[(v + j) * 3] = c0; color[(v + j) * 3 + 1] = c1; color[(v + j) * 3 + 2] = c2; } }
-        const pat = patterns[T.pat.getX(b)];
-        for (let j = 0; j < pat.length; j++) index[k++] = v + pat[j];
         v += c;
       }
       vstart[nb] = v;
       if (v !== nv) console.warn('meadow repack: vertex count mismatch', v, nv);
+      // V236: the index, chunk by chunk, each chunk's blades in ascending r1
+      // (= fract(_phase), the shader's LOD random) so a keep fraction is a
+      // prefix of the chunk's index - see applyBladeLod. The blade order in
+      // the file (by 4 m cell) is untouched; only the index order changes.
+      const tex = tg.userData || {};
+      const chunkDefs = (tex.bladeChunks && tex.bladeChunks.length) ? tex.bladeChunks : [{ bladeStart: 0, bladeCount: nb }];
+      const chunks = chunkDefs.map(ch => {
+        const n = ch.bladeCount, keys = new Float64Array(n);
+        for (let i = 0; i < n; i++) keys[i] = bph[ch.bladeStart + i] * 1048576 + i;   // (phase << 20) | local id: one numeric sort
+        keys.sort();
+        const start = k, lodR1 = new Float32Array(n), lodEnd = new Uint32Array(n);
+        for (let i = 0; i < n; i++) {
+          const b = ch.bladeStart + (keys[i] % 1048576), ph = bph[b];
+          const pat = patterns[T.pat.getX(b)], v0 = vstart[b];
+          for (let j = 0; j < pat.length; j++) index[k++] = v0 + pat[j];
+          lodR1[i] = ph === 65535 ? 0 : Math.fround(ph / 65535);   // fract() of the normalised ushort
+          lodEnd[i] = k - start;
+        }
+        return { start, count: k - start, min: ch.min, max: ch.max, lodR1, lodEnd };
+      });
+      if (k !== ntri * 3) console.warn('meadow repack: index count mismatch', k, ntri * 3);
       g.setAttribute('_root3', new THREE.BufferAttribute(root3, 3));
       // the shader reads the padded height stream as _height4 (three binds
       // attributes by name; an unbound one reads zero - which darkened every
@@ -2126,9 +2294,6 @@ loader.load(glbSrc, (gltf) => {
       if (color) g.setAttribute('color', new THREE.BufferAttribute(color, 3, true));
       g.setAttribute('_phase', new THREE.BufferAttribute(phase, 1, true));
       g.setIndex(new THREE.BufferAttribute(index, 1));
-      // chunk index ranges from the table's blade ranges
-      const tex = tg.userData || {};
-      const chunks = (tex.bladeChunks || []).map(ch => { let s = 0, n = 0; for (let b = 0; b < ch.bladeStart; b++) s += trisPer[T.pat.getX(b)]; for (let b = ch.bladeStart; b < ch.bladeStart + ch.bladeCount; b++) n += trisPer[T.pat.getX(b)]; return { start: s * 3, count: n * 3, min: ch.min, max: ch.max }; });
       g.userData.bladeChunks = chunks; g.userData.bladeRestBaked = true;
       table.visible = false; table.traverse(c => { c.visible = false; });
       console.info(`meadow repack: ${nb} blades, ${nv} verts, ${ntri} tris, ${patterns.length} patterns, ${chunks.length} chunks expanded in ${(performance.now() - t0).toFixed(0)} ms`);
@@ -2136,7 +2301,8 @@ loader.load(glbSrc, (gltf) => {
       const sc = new THREE.Vector3(); o.matrixWorld.decompose(new THREE.Vector3(), new THREE.Quaternion(), sc);
       mat.vertexColors = true; mat.needsUpdate = true;      // the tint comes from the table, not the primitive
       windify(mat, 'blade', true, sc.toArray(), true, true, true);
-      splitBladeChunks(o);
+      const chunkMeshes = splitBladeChunks(o);
+      chunkMeshes.forEach((mesh, i) => { if (chunks[i] && chunks[i].min && chunks[i].max) BLADE_LOD.push({ mesh, c: chunks[i] }); });
       o.userData.keepPainted = true;                          // (o.material, userData.basic and worldMeshes were set above)
       o.userData.shadowRole = { material: m?.name, cast: false, receive: true, response: 'meadow' };
       return;
@@ -2417,7 +2583,7 @@ loader.load(glbSrc, (gltf) => {
     const bb = new THREE.Box3().setFromObject(isl || gltf.scene);
     Grass.init(bb);
   }
-  window.S = scene; window.CLOUDS = clouds;
+  window.S = scene; window.CLOUDS = clouds; window.RENDERER = renderer;
   window.CAM = camera; window.CTRL = controls;
   window.PHYS = { Wind, Grass, Tree, Cloth };
   // live sun is the default mode - apply it once the world exists
@@ -2426,6 +2592,8 @@ loader.load(glbSrc, (gltf) => {
   el.style.opacity = 0;
   setTimeout(() => el.remove(), 700);
   tellParent({ type: 'ready' });
+  TIER.readyAt = performance.now();
+  if (Q.get('tier') === 'phone') for (const st of TIER.ladder) tierApply(st);
 }, (ev) => {
   if (ev.total) {
     document.getElementById('loading').textContent =
@@ -2438,7 +2606,6 @@ loader.load(glbSrc, (gltf) => {
   tellParent({ type: 'error', message: 'The island could not load.' });
 });
 
-const moveHint = document.getElementById('hud');
 let moveHintSeconds = 0;
 const movementKeys = new Set(['w', 'a', 's', 'd']);
 function isEditingControl(target) {
@@ -2469,6 +2636,7 @@ function releaseMovement() {
   for (const k in KEYS) KEYS[k] = false;
   moveHint.querySelectorAll('.held').forEach(key => key.classList.remove('held'));
   FLY.drag = false; FLY.lookX = FLY.lookY = 0; FLY.vel.set(0, 0, 0);
+  stickEnd();
 }
 addEventListener('blur', releaseMovement);
 addEventListener('focusin', e => { if (isEditingControl(e.target)) releaseMovement(); });
@@ -2706,7 +2874,7 @@ const kuwFast = (() => { const gl = renderer.getContext();
 if (!kuwFast) console.warn('post: no float colour buffers - Kuwahara keeps the 100-tap loop');
 
 function sizePost() {
-  const dpr = Math.min(devicePixelRatio, 2);
+  const dpr = DPR;
   rt.setSize(innerWidth * dpr, innerHeight * dpr);
   kuwH.setSize(innerWidth * dpr, innerHeight * dpr);
   kuwV.setSize(innerWidth * dpr, innerHeight * dpr);
@@ -2954,6 +3122,7 @@ renderer.setAnimationLoop(() => {
   fpsFrames++;
   const now = performance.now();
   const dt = Math.min((now - lastNow) / 1000, 1 / 30);   // clamp: tab-switch gaps must not explode the sims
+  if (TIER.on && TIER.readyAt && now - TIER.readyAt > 3000) tierStep(now - lastNow, now);
   lastNow = now;
   if (WIND.on) {
     windT += dt;
@@ -3047,6 +3216,8 @@ function drawFrame() {
   updateShadowUniforms();
   updateBoat(WIND.t.value);
   LOD.value = window.LOD_OFF ? 0 : 1;
+  if (window.MIRROR_KEEP !== undefined) MIRROR_KEEP.value = window.MIRROR_KEEP;
+  applyBladeLod(1);
   if (painterly) {
     renderer.setRenderTarget(rt);
     renderer.render(scene, camera);
@@ -3074,6 +3245,9 @@ function drawFrame() {
 // RENDER_ONCE draws the pose you just set, synchronously, through the same path
 // the loop uses (painterly render target included). Pair it with ?capture=1.
 window.RENDER_ONCE = drawFrame;
+// V237: one controller step without the animation loop (a hidden pane never
+// fires rAF), so the harness can prove the stick and the look drag move the eye.
+window.STEP = (dt) => { if (FLY.on) fly(dt); else walk(dt); };
 </script>
 </body>
 </html>
