@@ -64,9 +64,21 @@
     #kPanel .sw { position:relative; }
     #kPanel .sw::after { content:''; position:absolute; inset:-7px; border-radius:50%; }
   }
-  #kPanelT { transition:color .18s; }
-  #kPanelT svg { transition:transform .4s ease; }
-  #kPanelT:hover svg { transform:rotate(60deg); }
+  /* The icon row under the face: dance, draw, shuffle, reset, settings. Glyphs only; the
+     word appears under the one you hover (or focus). Where nothing hovers, the words stay
+     on, small. The gear opens the settings body below. */
+  #kIcons { display:flex; justify-content:center; gap:clamp(2px, 0.6vw, 10px); }
+  #kIcons .ic { appearance:none; background:transparent; border:0; padding:8px 7px 20px; margin:0; position:relative; color:#9a9b9f;
+    cursor:pointer; display:grid; place-items:center; transition:color .18s; -webkit-tap-highlight-color:transparent; }
+  #kIcons .ic svg { width:clamp(18px, min(1.5vw, 2.6vh), 24px); height:clamp(18px, min(1.5vw, 2.6vh), 24px); display:block; transition:transform .35s ease; }
+  #kIcons .ic span { position:absolute; top:calc(100% - 16px); left:50%; transform:translateX(-50%); white-space:nowrap; pointer-events:none;
+    font:clamp(8px, min(0.7vw, 1.3vh), 10px)/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing:.15em; opacity:0; transition:opacity .18s; }
+  #kIcons .ic:hover, #kIcons .ic:focus-visible, #kIcons .ic[data-on="1"], #kIcons .ic[aria-expanded="true"] { color:#141414; }
+  #kIcons .ic:hover span, #kIcons .ic:focus-visible span { opacity:1; }
+  #kIcons .ic:focus-visible { outline:none; }
+  #kIcons #kPanelT:hover svg, #kIcons #kPanelT[aria-expanded="true"] svg { transform:rotate(60deg); }
+  #kIcons #kReset:hover svg { transform:rotate(-40deg); }
+  @media (hover: none) { #kIcons .ic span { display:none; } #kIcons .ic { padding:10px 9px 12px; } #kIcons .ic svg { width:24px; height:24px; } }
   /* Mobile browsers report 100vh as the height with the toolbars hidden, so a
      panel sized against it runs off under Safari's bottom bar. dvh tracks the
      height actually on screen; --vph falls back to vh where dvh is missing. */
@@ -78,8 +90,14 @@
     /* The head is drawn at x=540 of a 960-wide viewBox, so centring the svg box
        leaves it 6.25% of the width right of centre. Pull it back by twice that
        — under justify-self:center a margin shifts the box by half its value. */
-    #kStage { --facetop:calc(var(--vph) * 0.19); --facew:min(94vw, calc(var(--vph) * 0.56)); --paneltop:min(calc(var(--facetop) + var(--facew) * var(--pk, 1) * 0.5625 + 12px), calc(var(--vph) - 44px)); }
-    #kSvg { width:calc(var(--facew) * var(--pk, 1)) !important; margin-right:0 !important; margin-left:calc(var(--facew) * (1 - var(--pk, 1)) * 0.125 - var(--facew) * var(--pk, 1) * 0.125) !important; justify-self:center !important; align-self:start !important; margin-top:var(--facetop) !important; }
+    /* The face takes the screen: the drawing is wider than the phone (its stage has
+       air either side of the head), so the svg runs past the edges and the chin sits
+       about halfway down; the icon row hangs just under it. */
+    #kStage { --facetop:calc(var(--vph) * 0.11); --facew:min(205vw, calc(var(--vph) * 0.98)); --paneltop:min(calc(var(--facetop) + var(--facew) * var(--pk, 1) * 0.5 + 4px), calc(var(--vph) - 44px)); }
+    /* DRAW's bar sits along the bottom here too (draw.js no longer picks the left side in
+       portrait); its compact scale is for a 700px phone, a 375px one needs it smaller still */
+    .kDrawCompact[data-place="bottom"] .Draw_toolbar { transform:scale(.55) !important; transform-origin:0% 100% !important; left:8px !important; translate:0 0 !important; bottom:44px !important; }   /* (the bundle centres it with left:50% translate:-50% in unscaled pixels) */
+    #kSvg { width:calc(var(--facew) * var(--pk, 1)) !important; margin-right:0 !important; margin-left:calc(50vw - var(--facew) * var(--pk, 1) * 0.5625) !important; justify-self:start !important; align-self:start !important; margin-top:var(--facetop) !important; }
     #kCopy { left:50% !important; top:calc(var(--vph) * 0.05) !important; transform:translate(-50%, 0) !important; justify-items:center !important; gap:20px !important; text-align:center !important; max-width:92vw !important; }
     #kCopy h1 { font-size:clamp(40px, 13vw, 68px) !important; }
     #kNav { left:0 !important; right:0 !important; top:auto !important; bottom:max(calc(var(--vph) * 0.035), 22px) !important; transform:none !important; justify-items:center !important; text-align:center !important; font-size:clamp(10px, 2.6vw, 13px) !important; }
@@ -95,7 +113,7 @@
 
   /* Short phones: sit the face higher so the open panel still clears. */
   @media (max-width: 880px) and (orientation: portrait) and (max-height: 680px) {
-    #kStage { --facetop:calc(var(--vph) * 0.13); }
+    #kStage { --facetop:calc(var(--vph) * 0.08); --facew:min(205vw, calc(var(--vph) * 0.9)); }
     #kCopy { top:calc(var(--vph) * 0.035) !important; }
   }
 
@@ -123,13 +141,13 @@
   #kEnter svg.kDoorIcon { width:clamp(46px, 4.2vw, 64px); height:auto; display:block; overflow:visible; }
   #kEnter .kRing { fill:none; stroke:currentColor; stroke-width:2; opacity:.22; }
   #kEnter .kRingFill { fill:none; stroke:currentColor; stroke-width:2.5; stroke-linecap:round; transform:rotate(-90deg); transform-origin:50% 50%; transition:stroke-dashoffset .25s linear; }
-  #kEnter .kLeafI { transform-box:fill-box; transform-origin:0% 50%; transition:transform .7s cubic-bezier(.65,0,.25,1); }
+  #kEnter .kLeafI { transform-box:fill-box; transform-origin:0% 50%; transition:transform 1.15s cubic-bezier(.5,.02,.18,1); }
   #kEnter.kOpen .kLeafI { transform:scaleX(.12) skewY(-12deg); }
-  #kEnter .kGlow { opacity:0; transition:opacity .7s; }
+  #kEnter .kGlow { opacity:0; transition:opacity 1s ease; }
   #kEnter.kOpen .kGlow { opacity:1; }
   #kEnter .kPct { position:absolute; left:50%; top:100%; transform:translate(-50%, 4px); font:clamp(10px, min(0.9vw, 1.7vh), 13px)/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing:.12em; font-variant-numeric:tabular-nums; opacity:.75; white-space:nowrap; transition:opacity .5s; }
-  #kEnter.kOpen .kPct { opacity:0; }
-  #kDoor { position:fixed; inset:0; z-index:40; background:#5d5f7e; opacity:0; transition:opacity 1.1s ease .45s; }
+  #kEnter.kOpen .kPct { opacity:0; transition-delay:.3s; }
+  #kDoor { position:fixed; inset:0; z-index:40; background:#5d5f7e; opacity:0; transition:opacity 1.4s cubic-bezier(.4,0,.2,1); }
   #kDoor.open { opacity:1; }
   #kDoor iframe { position:absolute; inset:0; width:100%; height:100%; border:0; background:#5d5f7e; }
   @media (prefers-reduced-motion: reduce) { #kEnter .kLeafI, #kDoor { transition-duration:.3s; } }
@@ -260,12 +278,15 @@
   </nav>
 
   <div id="kPanel" style="position:fixed; right:calc(var(--mr) + var(--pw) * 0.4375); transform:translateX(50%); top:min(calc(50% + var(--pw) * var(--pk) * 0.215), calc(100vh - 44px)); transition:top .3s cubic-bezier(.22,.61,.36,1), right .3s cubic-bezier(.22,.61,.36,1); z-index:3; width:max-content; display:grid; justify-items:stretch; font:10px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing:.07em; color:#8a8b90; gap:12px; user-select:none;">
-    <div style="display:flex; justify-content:space-between; align-items:center;">
-      <button id="kPanelT" type="button" class="tx" style="box-sizing:border-box; display:flex; align-items:center; justify-content:center; gap:9px; width:100%; padding:8px 12px; color:#9a9b9f; font-size:clamp(11px, min(1vw, 1.9vh), 17px); letter-spacing:.15em; cursor:pointer;"><svg viewBox="0 0 24 24" style="width:1.4em; height:1.4em; display:block;" aria-hidden="true"><circle cx="12" cy="12" r="5.4" fill="none" stroke="currentColor" stroke-width="2.2"></circle><g stroke="currentColor" stroke-width="2.8"><path d="M12 5 V2.4"></path><path d="M12 19 V21.6"></path><path d="M5 12 H2.4"></path><path d="M19 12 H21.6"></path><path d="M7.05 7.05 L5.2 5.2"></path><path d="M16.95 16.95 L18.8 18.8"></path><path d="M16.95 7.05 L18.8 5.2"></path><path d="M7.05 16.95 L5.2 18.8"></path></g></svg>PLAY</button>
+    <div id="kIcons" role="toolbar" aria-label="Play with the portrait">
+      <button id="kDance" type="button" class="ic" data-on="0" aria-label="Dance"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V6l10-2v11"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="15" r="2.5"/></svg><span>DANCE</span></button>
+      <button id="kDraw" type="button" class="ic" aria-label="Draw"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20l3.5-.7L19 7.8a2 2 0 0 0 0-2.8l-.9-.9a2 2 0 0 0-2.8 0L3.8 15.6 3 19.2z"/><path d="M13.5 6.5l3.9 3.9"/></svg><span>DRAW</span></button>
+      <button id="kShuffle" type="button" class="ic" aria-label="Shuffle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h3.5c1.4 0 2.7.7 3.5 1.9L14 15.1c.8 1.2 2.1 1.9 3.5 1.9H21"/><path d="M3 17h3.5c1.4 0 2.7-.7 3.5-1.9"/><path d="M14 8.9c.8-1.2 2.1-1.9 3.5-1.9H21"/><path d="M18.5 4.5L21 7l-2.5 2.5M18.5 14.5L21 17l-2.5 2.5"/></svg><span>SHUFFLE</span></button>
+      <button id="kReset" type="button" class="ic" aria-label="Reset"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.6-5.9"/><path d="M4 4v5h5"/></svg><span>RESET</span></button>
+      <button id="kPanelT" type="button" class="ic" aria-expanded="false" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span>SETTINGS</span></button>
     </div>
     <div id="kPanelB" style="display:none; box-sizing:border-box; gap:10px; position:absolute; top:calc(100% + 9px); left:50%; transform:translateX(-50%); width:min(452px, 88vw); padding:12px 14px 13px; background:rgba(255,255,255,.94); border:1px solid #e2e1dc; border-radius:11px; backdrop-filter:blur(7px); box-shadow:0 8px 30px rgba(20,20,20,.07); max-height:calc(100vh - 120px); overflow:auto;">
-      <div id="kBar" style="display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:8px; font:10px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing:.09em; color:#a6a7ac; user-select:none;">
-        <button id="kDance" type="button" data-on="0" style="flex:0 0 auto; white-space:nowrap;">DANCE</button><button id="kDraw" type="button" style="flex:0 0 auto; white-space:nowrap;">DRAW</button><button id="kLife" type="button" data-on="1" style="flex:0 0 auto; white-space:nowrap;">IDLE LIFE</button><button id="kShuffle" type="button">SHUFFLE</button><button id="kReset" type="button">RESET</button>
+      <div id="kBar" style="display:none; font:10px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing:.09em; color:#a6a7ac; user-select:none;">
         <span style="display:none;"><button id="kLegacy" type="button" data-on="0">OLD RIG</button><button id="kStats" type="button" data-on="0">FPS</button><span id="kReadout">bezier rig</span></span>
       </div>
       <div id="kCols" style="display:grid; grid-template-columns:repeat(3, 1fr); gap:11px 20px; align-items:start;">
@@ -504,16 +525,20 @@ class Component extends DCLogic {
     this.door = d;
     const frame = d.querySelector('#kWorld');
     let opened = false, heard = false;
+    // the arrival, in three beats: the ring reaches 100 and holds for a moment, the
+    // little door swings open (1.15 s, eased), and once it stands open the world fades
+    // in over the page (1.4 s). About three seconds from the last byte to the island.
     const open = () => {
       if (opened) return; opened = true;
       if (creep) { clearInterval(creep); creep = null; }
-      paint(1); en.classList.add('kOpen');
+      target = 1; paint(1);   // (the meadow's stages arrive after ready; nothing moves the ring back)
+      setTimeout(() => en.classList.add('kOpen'), 650);
       setTimeout(() => {
         d.classList.add('open');
         cancelAnimationFrame(this.raf);            // the portrait rests while the world runs
         if (this.dance) this.toggleDance();
         setTimeout(() => { try { frame.contentWindow.focus(); } catch (e) {} }, 1500);
-      }, 500);
+      }, 650 + 950);
     };
     const fail = (msg) => {
       console.warn('door:', msg);
@@ -536,7 +561,8 @@ class Component extends DCLogic {
         const world = await worldP;
         frame.contentWindow.postMessage(world ? { isola: 'go', world } : { isola: 'go' }, location.origin);
         if (world) { setBar(0.80); creepTo(0.88); }   // decoding starts; the viewer's stages take it from here
-      } else if (m.type === 'progress') { if (m.total) setBar(0.02 + 0.78 * m.loaded / m.total); }
+      } else if (opened) { if (m.type === 'error') fail(m.message || 'the island could not load'); }   // the ring is done; later stages (the meadow's) leave it at 100
+      else if (m.type === 'progress') { if (m.total) setBar(0.02 + 0.78 * m.loaded / m.total); }
       else if (m.type === 'stage') {
         const ceil = { decoding: 0.88, expanding: 0.95, warming: 0.99 }[m.stage];
         if (m.stage === 'expanding' && typeof m.frac === 'number') { if (creep) { clearInterval(creep); creep = null; } setBar(0.88 + 0.07 * Math.min(1, m.frac)); }   // real progress from the viewer
@@ -724,7 +750,7 @@ class Component extends DCLogic {
       const stage = document.getElementById('kStage'), svg = document.getElementById('kSvg');
       if (!b || !pn || !stage) return;
       b.style.display = open ? 'grid' : 'none';
-      if (h) h.style.color = open ? '#141414' : '#9a9b9f';
+      if (h) h.setAttribute('aria-expanded', open ? 'true' : 'false');
       b.style.maxHeight = ''; b.style.overflowY = '';
       b.style.top = 'calc(100% + 9px)';
       b.style.left = '50%';
@@ -817,6 +843,7 @@ class Component extends DCLogic {
         this.setPanel(b.style.display === 'none');
         return;
       }
+      if (t.id === 'kLife') return;   // (the idle-life switch is gone from the row; idle life stays on)
       if (t.dataset && t.dataset.c) {
         this.theme[t.dataset.c === 'inkColor' ? 'ink' : 'bg'] = t.dataset.v;
         this.applyTheme();

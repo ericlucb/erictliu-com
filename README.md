@@ -111,6 +111,14 @@ in `index.html` (the `Component` class, just above `openDoor()`) and delete
 and `erictliu.com` hosts. Cache-busting is then by file name (put the
 viewer's build tag in the object key).
 
+The icon row under the portrait (dance, draw, shuffle, reset, and the gear
+for the sliders and swatches) shows a word under the icon you hover; on a
+phone the glyphs stand alone, the face fills the width, and DRAW's bar runs
+along the bottom (draw.js no longer picks the left side in portrait; the
+page scales the bar to fit). The favicons come from `make-icons.mjs`
+(Chrome only, the head posed a little to its left) or `make-icons.py`
+(rsvg + ImageMagick, also writes og.png).
+
 How the door works (`openDoor()` in `index.html`): nothing is fetched until
 the click. Then the ENTER link becomes a small door with a ring around it
 and the page starts downloading the world file that instant, from the tag
@@ -123,9 +131,10 @@ waits, stores the file in the Cache API (`isola-world`) under that URL for
 the next visit, and hands the bytes over as a Blob with `{isola:'go'}`. (A
 hello naming a different URL - the stamp here behind the viewer - restarts
 the download from the viewer's URL.) The viewer decodes the file while the
-ring creeps through its stages, and posts `ready`, at which point the little
-door swings open, the world fades in over the page, the portrait's
-animation loop pauses and the iframe takes focus. The open door is a history
+ring creeps through its stages, and posts `ready`, at which point the ring holds
+at 100 for a moment, the little door swings open, and once it stands open
+the world fades in over the page (about three seconds in all); the
+portrait's animation loop pauses and the iframe takes focus. The open door is a history
 entry, so the browser's Back (or the phone's back gesture) closes it,
 aborts a download still running, and restores ENTER; there is no LEAVE
 button and Esc is left to the world (it pauses the mouse look). If the page
