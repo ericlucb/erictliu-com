@@ -77,11 +77,11 @@
   #kIcons .ic:hover span, #kIcons .ic:focus-visible span, body:has(#kDrawHost) #kDraw span { opacity:1; }
   #kIcons .ic:focus-visible { outline:none; }
   #kIcons #kPanelT:hover svg, #kIcons #kPanelT[aria-expanded="true"] svg { transform:rotate(60deg); }
-  @media (hover: none) {
-    #kIcons .ic { display:inline-flex; align-items:center; gap:7px; padding:10px 9px; }
-    #kIcons .ic svg { width:24px; height:24px; }
-    #kIcons .ic span { display:none; position:static; transform:none; opacity:1; font-size:10px; }
-    #kIcons .ic[data-on="1"] span, #kIcons .ic[aria-expanded="true"] span, #kIcons .ic.said span, body:has(#kDrawHost) #kDraw span { display:inline; }
+  @media (hover: none) {   /* a phone: glyphs only, a little larger; a toggle shows its state by colour */
+    #kIcons { gap:6px; }
+    #kIcons .ic { padding:10px 10px; }
+    #kIcons .ic svg { width:26px; height:26px; }
+    #kIcons .ic span { display:none !important; }
   }
   @media (hover: none) { body:has(#kDrawHost) #kPanel { display:none !important; } }   /* a phone drawing: the bar has the bottom of the screen; DONE closes it */
   /* Mobile browsers report 100vh as the height with the toolbars hidden, so a
@@ -101,16 +101,19 @@
     #kStage { --facetop:calc(var(--vph) * 0.5075 - 10px - var(--facew) * var(--pk, 1) * 0.34); --facew:min(205vw, calc(var(--vph) * 0.98)); --paneltop:min(calc(var(--facetop) + var(--facew) * var(--pk, 1) * 0.57 + 6px), calc(var(--vph) - 44px)); }   /* the head and the icon row centred between the copy and the door */
     /* DRAW's bar sits along the bottom here too (draw.js no longer picks the left side in
        portrait); its compact scale is for a 700px phone, a 375px one needs it smaller still */
-    .kDrawCompact[data-place="bottom"] .Draw_toolbar { transform:scale(.72) !important; transform-origin:0% 100% !important; left:8px !important; translate:0 0 !important; bottom:56px !important; }   /* (the bundle centres it with left:50% translate:-50% in unscaled pixels) */
-    /* two rows: the bundle lays its 15 items in one 621px row and sets the bar's width to match; let the
-       main panel size the bar instead and wrap it - the tools on the first row, ink / size / hide on the second */
-    .kDrawCompact[data-place="bottom"] .MorphBar_bar { height:auto !important; }   /* (its width stays the bundle's: it measures the panel) */
+    #kStage { --drawk:0.9; }   /* the bar's scale on a phone */
+    .kDrawCompact[data-place="bottom"] .Draw_toolbar { transform:scale(var(--drawk)) !important; transform-origin:0% 100% !important; left:8px !important; translate:0 0 !important; bottom:calc(10px + env(safe-area-inset-bottom, 0px)) !important; }   /* (the bundle centres it with left:50% translate:-50% in unscaled pixels) */
+    /* two rows the width of the screen: the bundle lays its 15 items in one 621px row and sets the bar's width to
+       match; the main panel sizes the bar instead and wraps - the six brushes spread across the first row, the
+       controls (undo / redo / clear, size, ink, hide) across the second */
+    .kDrawCompact[data-place="bottom"] .MorphBar_bar { width:calc((100vw - 16px) / var(--drawk)) !important; height:auto !important; }
     .kDrawCompact[data-place="bottom"] .MorphBar_clip { position:relative !important; width:100% !important; height:auto !important; }
-    .kDrawCompact[data-place="bottom"] .MorphBar_panel:first-child { position:relative !important; display:flex !important; flex-wrap:wrap !important; width:312px !important; height:auto !important; row-gap:12px !important; padding-top:6px !important; justify-content:center !important; }
-    .kDrawCompact[data-place="bottom"] .MorphBar_panel:first-child .Toolbar_tool { order:0; margin-bottom:0 !important; }   /* the six tools fill the first row (their seated overhang would cover the second) */
-    .kDrawCompact[data-place="bottom"] .MorphBar_panel:first-child .Toolbar_seated { order:1; }      /* undo / redo / clear, size, ink, hide on the second */
+    .kDrawCompact[data-place="bottom"] .MorphBar_panel:first-child { position:relative !important; display:flex !important; flex-wrap:wrap !important; width:100% !important; height:auto !important; row-gap:14px !important; padding:8px 18px 0 !important; justify-content:space-evenly !important; column-gap:0 !important; }
+    .kDrawCompact[data-place="bottom"] .MorphBar_panel:first-child .Toolbar_tool { order:0; margin-bottom:0 !important; flex:0 0 16.66% !important; width:auto !important; display:flex !important; justify-content:center !important; }   /* a sixth of the row each: the six brushes ARE the first row (their seated overhang would cover the second) */
+    .kDrawCompact[data-place="bottom"] .MorphBar_panel:first-child .Toolbar_seated { order:1; flex:0 0 16.66% !important; width:auto !important; justify-content:center !important; }      /* the six controls are the second */
     .kDrawCompact[data-place="bottom"] .MorphBar_panel:first-child .Toolbar_divider { display:none !important; }
-    .kDrawCompact[data-place="bottom"] .MorphBar_panel:not(:first-child) { top:50% !important; margin-top:-36px !important; }   /* the ink / size panels sit mid-bar */
+    .kDrawCompact[data-place="bottom"] .MorphBar_panel:not(:first-child) { top:50% !important; left:50% !important; margin-top:-36px !important; translate:-50% 0 !important; }   /* the ink / size panels sit mid-bar, centred */
+    body:has(#kDrawHost) #kStage { --facetop:calc(var(--vph) * 0.05 + 104px - var(--facew) * var(--pk, 1) * 0.11); }   /* drawing: the face up under the links, air for SAVE / DONE above the bar */
     body:has(#kDrawHost) #kNav { display:none !important; }   /* the door waits under the bar until DONE */
     #kSvg { width:calc(var(--facew) * var(--pk, 1)) !important; margin-right:0 !important; margin-left:calc(50vw - var(--facew) * var(--pk, 1) * 0.5625) !important; justify-self:start !important; align-self:start !important; margin-top:var(--facetop) !important; }
     #kCopy { left:50% !important; top:calc(var(--vph) * 0.05) !important; transform:translate(-50%, 0) !important; justify-items:center !important; gap:20px !important; text-align:center !important; max-width:92vw !important; }
@@ -860,9 +863,6 @@ class Component extends DCLogic {
       const body = document.getElementById('kPanelB');
       if (!inPanel && body && body.style.display !== 'none') this.setPanel(false);
       if (!t) return;
-      if (t.classList.contains('ic') && matchMedia('(hover: none)').matches) {   // a tapped icon says its word for a moment (toggles keep it while on)
-        t.classList.add('said'); clearTimeout(t._said); t._said = setTimeout(() => t.classList.remove('said'), 1400);
-      }
       if (t.id === 'kDance') { this.toggleDance(); return; }
       if (t.id === 'kShuffle') { this.shuffle(); return; }
       if (t.id === 'kDraw') { this.setPanel(false); if (document.getElementById('kDrawHost') && window.__drawesome) window.__drawesome.close(); else this.openDraw(); return; }   // a toggle: the second click closes it
