@@ -92,9 +92,12 @@ stamps the world's tag and raw size into this page's door (`static WORLD_TAG`
 `index.html` together.
 
 Nothing else needs bumping — the viewer cache-busts its own files with its
-`BUILD` constant, and the world by its own content hash. The world file
-`isola/island_world.glb` is ~69 MB (54 MB on the wire, Pages gzips it);
-GitHub warns above 50 MB but Pages serves files up to 100 MB.
+`BUILD` constant, and the world by its own content hash. The world is two
+files: `isola/island_world.glb`, the core (~43 MB raw; the door downloads
+it with the ring), and `isola/island_meadow.glb`, the grass (~25 MB raw;
+the viewer fetches it once the door is open and the blades grow in over a
+second). Pages gzips both; GitHub warns above 50 MB but Pages serves files
+up to 100 MB.
 
 **Hosting the world off the repo.** Every world update adds ~58 MB to this
 repo's history. To move the file to Cloudflare R2: create a bucket, upload

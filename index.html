@@ -441,8 +441,8 @@ class Component extends DCLogic {
   // then put its https URL here - the viewer only accepts *.r2.dev,
   // *.r2.cloudflarestorage.com and erictliu.com hosts.
   static WORLD = '';
-  static WORLD_TAG = '2d65b32b';
-  static WORLD_BYTES = 67643908;
+  static WORLD_TAG = '291ea798';
+  static WORLD_BYTES = 42981988;
   openDoor() {
     if (this.door) return;
     const en = document.getElementById('kEnter'); if (!en) return;
@@ -491,7 +491,7 @@ class Component extends DCLogic {
       try {   // for the next visit; a phone's quota or private mode may refuse, and the hand-off does not depend on it
         const c = await caches.open('isola-world');
         await c.put(url, new Response(blob, { headers: { 'Content-Type': 'model/gltf-binary', 'Content-Length': String(blob.size) } }));
-        for (const k of await c.keys()) if (k.url !== url) await c.delete(k);   // one world in the cache, not one per version
+        for (const k of await c.keys()) if (k.url !== url && /island_world/.test(k.url)) await c.delete(k);   // one core in the cache, not one per version (the viewer parks the meadow beside it)
       } catch (e) { console.warn('door: could not cache the world', e); }
       return blob;
     };

@@ -76,7 +76,7 @@ export function installStats(opts) {
     return { build: opts.build, ua: navigator.userAgent, tier: opts.tier ? opts.tier() : null, dpr: +renderer.getPixelRatio().toFixed(2), canvas: [cv.width, cv.height], css: [innerWidth, innerHeight],
              geometryMB: MB(geo.bytes), geometryBy: Object.fromEntries(Object.entries(geo.by).sort((x, y) => y[1] - x[1]).slice(0, 12).map(([k, v]) => [k, MB(v)])),
              texturesMB: MB(tex.bytes), textures: tex.list.slice(0, 12), targetsMB, targets, totalMB: +(MB(geo.bytes) + MB(tex.bytes) + targetsMB + (heapMB || 0)).toFixed(0),
-             heapMB, frame, programs: (renderer.info.programs || []).length, load: { fetched: rel('fetched'), parsed: rel('parsed'), meadow: rel('meadow'), visited: rel('visited'), ready: rel('ready') },
+             heapMB, frame, programs: (renderer.info.programs || []).length, load: { fetched: rel('fetched'), parsed: rel('parsed'), meadow: rel('meadow'), visited: rel('visited'), ready: rel('ready'), meadowFetched: rel('meadowFetched'), meadowReady: rel('meadowReady') },
              ready, lastVisit };
   };
   window.STATS = snapshot;
@@ -92,7 +92,7 @@ export function installStats(opts) {
         `${s.build}  ${t.memory ? 'phone tier' : 'desktop tier'}${t.touch ? ' touch' : ''}  dpr ${s.dpr}  ${s.canvas[0]}x${s.canvas[1]}`,
         `gpu  geo ${s.geometryMB} + tex ${s.texturesMB} + targets ${s.targetsMB}${s.heapMB != null ? ' + heap ' + s.heapMB : ''} = ${s.totalMB} MB`,
         `frame ${s.frame ? s.frame.median + ' ms (p90 ' + s.frame.p90 + ')' : '-'}  programs ${s.programs}${t.applied && t.applied.length ? '  ladder ' + JSON.stringify(t.applied) : ''}`,
-        `load  fetch ${s.load.fetched}  parse ${s.load.parsed}  build ${s.load.visited}  ready ${s.load.ready} ms`,
+        `load  fetch ${s.load.fetched}  parse ${s.load.parsed}  build ${s.load.visited}  ready ${s.load.ready} ms  meadow ${s.load.meadowReady} ms`,
         s.lastVisit ? `last visit: ${s.lastVisit}` : '',
       ].filter(Boolean).join('\n');
     };

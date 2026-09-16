@@ -39,7 +39,7 @@ import { installStats } from './stats.js';
 
 // cache-buster: one label per build, so a reload re-uses the cached 117 MB
 // GLB instead of fetching it again (v115 stamped the clock on every load)
-const BUILD = 'v251';
+const BUILD = 'v252';
 // V242: the world's parse finishes in ~200 ms now (meshopt), sooner than
 // this module finishes evaluating - it suspends on later top-level awaits -
 // so the load callback must wait for the module's last line, or it reads
@@ -71,7 +71,7 @@ const TOUCH = matchMedia('(hover: none) and (pointer: coarse)').matches;
 // downloading the world at the click (it carries the world's tag); this
 // names the URL the viewer will ask for and, with the door's 'ack', holds
 // the viewer's own download until the door's Blob arrives.
-const { WORLD_URL, GLB_URL, GLB_ABS } = resolveWorldUrl(Q, DEV);
+const { WORLD_URL, GLB_URL, GLB_ABS, MEADOW_URL, MEADOW_ABS } = resolveWorldUrl(Q, DEV);
 window.WORLD_URL = WORLD_URL;
 const DOOR = EMBED ? waitForDoor(GLB_ABS, BUILD, WORLD_BYTES) : null;
 // V240 - THE PHONE'S MEMORY (Eric: 'on mobile chrome iOS it loads but then
@@ -953,6 +953,10 @@ const LOD = { value: 1 };
 // V236: the share of blades drawn into the water's mirror (1 = every blade
 // the main pass draws). window.MIRROR_KEEP sets it for A/B measurement.
 const MIRROR_KEEP = { value: 1 };
+// V252: the meadow arrives after the door opens (its own file); its blades
+// grow from their roots over a second (0 -> 1, smoothstepped in the shader)
+// instead of appearing - 1 from the start in the capture harness
+const GROW = { value: 1 };
 const ROOT_Q = { c: { value: new THREE.Vector3() }, h: { value: new THREE.Vector3(1, 1, 1) } };   // V245: the blade table's node transform, for the shader's root
 // V236 - LOD BY DRAW RANGE. The blade LOD (V218) collapses a dropped blade in
 // the VERTEX shader, so the GPU still transforms every one of the meadow's
@@ -1188,7 +1192,8 @@ function windify(material, kind, hasHeight = false, scl = [1, 1, 1], hasPhase = 
       // V245: the root ships as the table's own int16 (padded to four), scaled
       // in the shader by the table node's translation and scale - the same
       // metres the CPU expansion used to write as float32 per vertex
-      sh.vertexShader = '#define HAS_ROOT\n#define ROOT_REL\nattribute vec4 _root3q;\nuniform vec3 uRootC, uRootH;\n#define _root3 (uRootC + uRootH * _root3q.xyz)\n#define _root (_root3.xz)\n' + sh.vertexShader;
+      sh.vertexShader = '#define HAS_ROOT\n#define ROOT_REL\nattribute vec4 _root3q;\nuniform vec3 uRootC, uRootH;\nuniform float uGrow;\n#define _root3 (uRootC + uRootH * _root3q.xyz)\n#define _root (_root3.xz)\n' + sh.vertexShader;
+      sh.uniforms.uGrow = GROW;
       sh.uniforms.uRootC = ROOT_Q.c; sh.uniforms.uRootH = ROOT_Q.h;
       // the repack ships _height as a (hf, 0) uint16 pair - see optimize_glb.py
       sh.vertexShader = sh.vertexShader.replace('attribute float _height;', 'attribute vec4 _height4;\n#define _height (_height4.x)');
@@ -1246,6 +1251,7 @@ function windify(material, kind, hasHeight = false, scl = [1, 1, 1], hasPhase = 
       `#include <begin_vertex>
       {
         #ifdef ROOT_REL
+        transformed *= uGrow * uGrow * (3.0 - 2.0 * uGrow);   // V252: the meadow grows in after the door opens
         transformed += _root3 / vec3(${SX}, ${SY}, ${SZ});   // V234: root-relative position -> the blade's place (local units)
         #endif
         vec3 wpos = (modelMatrix * vec4(transformed, 1.0)).xyz;
@@ -1661,7 +1667,6 @@ T_LOAD.fetched = performance.now();
 if (worldBuf) loader.parse(worldBuf, './', async (gltf) => {
   worldBuf = null; WORLD_BLOB = null;   // the parser holds what it needs; 69 MB less for the GC to walk during the build
   T_LOAD.parsed = performance.now();
-  MeshoptDecoder.useWorkers(0);          // V244: the decode is done; the workers' heaps (~100 MB) go with them
   await MODULE_READY;
   // V244 - HOLD NOTHING BUT THE SCENE. `gltf` carries the parser and its cache
   // of every decoded buffer plus the file itself (~200 MB). Every closure
@@ -1674,6 +1679,7 @@ if (worldBuf) loader.parse(worldBuf, './', async (gltf) => {
   // every mesh in traversal order, visited one at a time so the meadow's
   // expansion can yield (three's traverse is synchronous; the list is taken
   // first, so the chunk meshes splitBladeChunks adds are not revisited)
+  const topOf = (o) => { let t = o; while (t.parent) t = t.parent; return t; };   // the file root a mesh came in with (the meadow has its own, V252)
   const visit = async (o) => {
     if (!o.isMesh) return;
     // V242: the props ship int16-quantised, each attribute over its own
@@ -1708,7 +1714,7 @@ if (worldBuf) loader.parse(worldBuf, './', async (gltf) => {
       o.geometry.boundingBox = null; o.geometry.boundingSphere = null; o.geometry.computeBoundingSphere();
       if (DEV) (T_LOAD.dequant = T_LOAD.dequant || []).push([o.name, Math.round(performance.now() - tq), 'sphere', Math.round(performance.now() - ts)]);
     }
-    if (o.geometry.attributes._tree_id) attachTreeTable(o.geometry, root);   // V251
+    if (o.geometry.attributes._tree_id) attachTreeTable(o.geometry, topOf(o));   // V251
     if (o.name.startsWith(M.prefixes.treeTable)) { o.visible = false; return; }   // (read by attachTreeTable; removed there)
     if (o.name.includes(M.substrings.clothes)) {   // the cloth rig writes float normals back into this array every frame
       const nA = o.geometry.attributes.normal;
@@ -2210,7 +2216,7 @@ if (worldBuf) loader.parse(worldBuf, './', async (gltf) => {
     // and triangle pattern. Expand the table per vertex, generate the index,
     // split into the spatial chunks; the blade shader runs in ROOT_REL mode.
     if (o.name === M.nodes.meadow || o.parent?.name === M.nodes.meadow) {
-      const table = root.getObjectByName(M.nodes.meadowTable);
+      const table = topOf(o).getObjectByName(M.nodes.meadowTable);
       const tg = table && (table.geometry || table.children[0]?.geometry);
       if (!tg) { console.warn('meadow repack: no WEB_meadow_table'); return; }
       const g = o.geometry, ex = g.userData || {};   // three puts primitive extras on the geometry
@@ -2601,6 +2607,31 @@ if (worldBuf) loader.parse(worldBuf, './', async (gltf) => {
   if (DEV) T_LOAD.visits = slow.sort((a, b) => b[1] - a[1]).slice(0, 8);
   T_LOAD.visited = performance.now();
   scene.add(root);
+  // V252 - THE MEADOW ARRIVES AFTER THE DOOR OPENS. The blades and their
+  // table are their own file (a third of the world's bytes); it is fetched
+  // once the door is open, parsed on the same workers, visited by the same
+  // code, and its blades grow from their roots over a second. The Cache API
+  // keeps it for the next visit beside the door's copy of the core.
+  const loadMeadow = async () => {
+    const t0 = performance.now();
+    let buf;
+    try { buf = await worldBytes({ url: MEADOW_URL, abs: MEADOW_ABS, blob: null, cache: true }, () => {}); }
+    catch (err) { console.error('island_meadow.glb failed to load', err); return; }
+    T_LOAD.meadowFetched = performance.now();
+    loader.parse(buf, './', async (g) => {
+      buf = null;
+      const mroot = g.scene; g = null;
+      if (mroot.userData.terrainProfile !== TERRAIN_PROFILE.version) console.warn('meadow: terrain profile ' + mroot.userData.terrainProfile + ' vs the core\'s ' + TERRAIN_PROFILE.version);
+      const list = []; mroot.traverse((o) => { if (o.isMesh) list.push(o); });
+      for (const o of list) { lastYield = performance.now(); await visit(o); }
+      MeshoptDecoder.useWorkers(0);        // the last decode is done; the workers' heaps (~100 MB) go with them
+      GROW.value = Q.has('capture') ? 1 : 0;
+      scene.add(mroot);
+      releaseCpuCopies(mroot, new Set());
+      T_LOAD.meadowReady = performance.now();
+      console.info(`meadow: fetched in ${Math.round(T_LOAD.meadowFetched - t0)} ms, built in ${Math.round(T_LOAD.meadowReady - T_LOAD.meadowFetched)} ms, ${Math.round(T_LOAD.meadowReady - T_LOAD.ready)} ms after ready`);
+    }, (err) => console.error('island_meadow.glb could not be parsed', err));
+  };
   markBareTwigs(root);
   T_LOAD.twigs = performance.now();
   // V221: the step slab (WEB_HM_home_garden_27, 396 triangles) spans kit-local
@@ -2655,6 +2686,7 @@ if (worldBuf) loader.parse(worldBuf, './', async (gltf) => {
     setTimeout(() => el.remove(), 700);
     tellParent({ type: 'ready' });
     STATS.ready();
+    loadMeadow();
     // the mouse look starts once the world is in view: the door's fade runs ~2 s after ready
     if (!TOUCH && !Q.has('capture')) setTimeout(() => { if (!document.body.classList.contains('touch')) setLooking(true); }, EMBED ? 1800 : 0);
     TIER.readyAt = performance.now();
@@ -3040,6 +3072,7 @@ renderer.setAnimationLoop(() => {
   if (TIER.on && TIER.readyAt && now - TIER.readyAt > 3000) tierStep((now - lastNow) / (TOUCH_ACTIVE ? 2 : 1), now);
   if (TIER.readyAt) STATS.frame(now - lastNow);
   lastNow = now;
+  if (GROW.value < 1) GROW.value = Math.min(1, GROW.value + dt / 1.2);
   if (WIND.on) {
     windT += dt;
     Wind.step(dt);
