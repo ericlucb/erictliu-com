@@ -34,10 +34,11 @@ import { BLADE_LOD, applyBladeLod } from './blade-lod.js';
 import { failPanel, installLoadGuards } from './load-panel.js';
 import { releaseCpuCopies, halveTexture, halveTextures, releaseImages } from './memory.js';
 import { WORLD_TAG, WORLD_BYTES, resolveWorldUrl, worldBytes } from './world-file.js';
+import { installStats } from './stats.js';
 
 // cache-buster: one label per build, so a reload re-uses the cached 117 MB
 // GLB instead of fetching it again (v115 stamped the clock on every load)
-const BUILD = 'v246';
+const BUILD = 'v247';
 // V242: the world's parse finishes in ~200 ms now (meshopt), sooner than
 // this module finishes evaluating - it suspends on later top-level awaits -
 // so the load callback must wait for the module's last line, or it reads
@@ -126,7 +127,7 @@ const VISIBLE_SUN_ON={value:1};
 // V244: the two 256x256 height grids (collision, the terrain profile's
 // original ground) arrive as one binary at 0.1 mm (scripts/pack_grids.mjs);
 // the profile's scalars ride in its header
-const GRIDS = await fetch('./world-grids.bin?v=' + BUILD).then(async (r) => {
+const GRIDS = await (window.GRIDS_FETCH || fetch('./world-grids.bin?v=' + BUILD)).then(async (r) => {   // (index.html starts the fetch beside the program's own)
   if (!r.ok) throw new Error('world-grids.bin ' + r.status);
   const buf = await r.arrayBuffer(); const dv = new DataView(buf); const hl = dv.getUint32(0, true);
   const hd = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 4, hl)).replace(/\0+$/, ''));
@@ -2584,19 +2585,23 @@ if (worldBuf) loader.parse(worldBuf, './', async (gltf) => {
   window.PHYS = { Wind, Grass, Tree, Cloth };
   // live sun is the default mode - apply it once the world exists
   $('c-light').dispatchEvent(new Event('change'));
+  T_LOAD.halve0 = performance.now();
   if (MEMORY_TIER) halveTextures(scene, EXTRA_TEXTURES, 1024);   // V245: a phone's screen resolves no more; the house's 1024x1536 sheets go to 512x768
+  T_LOAD.halve = performance.now();
   const freed = Q.has('nofree') ? 0 : releaseCpuCopies(scene, new Set([(Cloth.mesh || Cloth.pending) && (Cloth.mesh || Cloth.pending).geometry]));   // dev: ?nofree=1 keeps the CPU copies for inspection
   console.info(`memory: ${(freed / 1048576).toFixed(0)} MB of CPU geometry copies released after upload`);
+  T_LOAD.release = performance.now();
   // V240: warm the shaders and uploads BEFORE saying ready, so the door
   // opens onto frames that already run at speed (the first frames after a
   // load cost 100+ ms each - a stutter right through the fade)
   (async () => {
     tellParent({ type: 'stage', stage: 'warming' });
-    let ms = 1e9;
+    let ms = 1e9; T_LOAD.warm = [];
     for (let i = 0; i < 12 && !(i >= 3 && ms < 25); i++) {
-      const a = performance.now(); drawFrame(); ms = performance.now() - a;
+      const a = performance.now(); drawFrame(); ms = performance.now() - a; T_LOAD.warm.push(Math.round(ms));
       await new Promise(r => setTimeout(r, 0));
     }
+    T_LOAD.warmed = performance.now();
     releaseImages(scene, renderer, EXTRA_TEXTURES);
     setTimeout(() => releaseImages(scene, renderer, EXTRA_TEXTURES), 15000);   // whatever another eye has uploaded since
     T_LOAD.ready = performance.now();
@@ -2607,6 +2612,7 @@ if (worldBuf) loader.parse(worldBuf, './', async (gltf) => {
     el.style.opacity = 0;
     setTimeout(() => el.remove(), 700);
     tellParent({ type: 'ready' });
+    STATS.ready();
     // the mouse look starts once the world is in view: the door's fade runs ~2 s after ready
     if (!TOUCH && !Q.has('capture')) setTimeout(() => { if (!document.body.classList.contains('touch')) setLooking(true); }, EMBED ? 1800 : 0);
     TIER.readyAt = performance.now();
@@ -2860,6 +2866,23 @@ const kuwOpts = { count: 2, type: THREE.HalfFloatType, minFilter: THREE.NearestF
                   depthBuffer: false, generateMipmaps: false };
 const kuwH = new THREE.WebGLRenderTarget(2, 2, kuwOpts);
 const kuwV = new THREE.WebGLRenderTarget(2, 2, kuwOpts);
+// V247: the viewer's own numbers (web/src/stats.js) - ?stats=1 draws them on
+// screen, which is how a real phone is read; window.STATS() is what the
+// audit and the WebKit run collect. Render targets by their real sizes:
+// the painterly target is colour + depth, each S samples plus its resolve.
+const STATS = installStats({
+  renderer, scene, extraTextures: EXTRA_TEXTURES, build: BUILD, overlay: Q.has('stats'),
+  tier: () => ({ memory: MEMORY_TIER, touch: document.body.classList.contains('touch'), applied: TIER.applied, ladderOn: TIER.on }),
+  load: () => T_LOAD,
+  targets: () => {
+    const cv = renderer.domElement, list = [{ name: 'canvas', w: cv.width, h: cv.height, bpp: 8 }];
+    list.push({ name: 'painterly ' + rt.samples + 'x', w: rt.width, h: rt.height, bpp: 8 * (rt.samples + 1) });
+    list.push({ name: 'kuwahara x2', w: kuwH.width, h: kuwH.height, bpp: 32 });
+    if (seaMesh) { const m = seaMesh.getRenderTarget(); list.push({ name: 'mirror', w: m.width, h: m.height, bpp: 8 }); }
+    if (SUN.light && SUN.light.shadow.map) list.push({ name: 'shadow', w: SUN.light.shadow.mapSize.x, h: SUN.light.shadow.mapSize.y, bpp: 8 });
+    return list;
+  },
+});
 const boxMat = new THREE.ShaderMaterial({
   glslVersion: THREE.GLSL3,
   uniforms: { tA: { value: null }, tB: { value: null }, uStep: { value: new THREE.Vector2() }, uSquare: { value: 1 } },
@@ -3139,6 +3162,7 @@ renderer.setAnimationLoop(() => {
   const now = performance.now();
   const dt = Math.min((now - lastNow) / 1000, 1 / 30);   // clamp: tab-switch gaps must not explode the sims
   if (TIER.on && TIER.readyAt && now - TIER.readyAt > 3000) tierStep(now - lastNow, now);
+  if (TIER.readyAt) STATS.frame(now - lastNow);
   lastNow = now;
   if (WIND.on) {
     windT += dt;

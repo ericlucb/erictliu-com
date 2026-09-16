@@ -5,7 +5,7 @@
 export const isBitmapImage = (im) => !!im && ((typeof ImageBitmap !== 'undefined' && im instanceof ImageBitmap) || im instanceof HTMLImageElement || im instanceof HTMLCanvasElement);
 // Freed on upload with three's own onUpload pattern; bounds are computed
 // first so the cull never needs the array; a lost context reloads the page.
-function disposeArray() { this.array = null; }
+function disposeArray() { (this.userData = this.userData || {}).bpe = this.array.BYTES_PER_ELEMENT; this.array = null; }   // (the element size stays, for stats.js)
 export function releaseCpuCopies(root, keep) {
   let bytes = 0; const seen = new Set();
   root.traverse(o => {

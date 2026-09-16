@@ -476,6 +476,10 @@ class Component extends DCLogic {
     let worldUrl = K.WORLD || new URL('./isola/island_world.glb?v=' + K.WORLD_TAG, location.href).href;
     let abort = new AbortController();
     const fetchWorld = async (url, rawBytes, signal) => {
+      try {   // V248: the copy this page parked last time, under this exact URL (a new world has a new URL)
+        const hit = window.caches && await caches.match(url);
+        if (hit) { const blob = await hit.blob(); if (blob.size > 1024) { setBar(0.80); return blob; } }
+      } catch (e) { console.warn('door: cache lookup failed', e); }
       const res = await fetch(url, { signal });
       if (!res.ok || !res.body) throw new Error('world fetch ' + res.status);
       const encoded = !!res.headers.get('content-encoding');
@@ -547,7 +551,8 @@ class Component extends DCLogic {
     history.pushState({ isola: 'door' }, '', location.href);
     this.onDoorPop = () => this.closeDoor(true);
     addEventListener('popstate', this.onDoorPop);
-    frame.src = './isola/?embed=1' + (this.constructor.WORLD ? '&world=' + encodeURIComponent(this.constructor.WORLD) : '');
+    const pass = ['stats', 'dev', 'tier', 'dpr'].filter(k => new URLSearchParams(location.search).has(k)).map(k => '&' + k + '=' + encodeURIComponent(new URLSearchParams(location.search).get(k) || '1')).join('');
+    frame.src = './isola/?embed=1' + pass + (this.constructor.WORLD ? '&world=' + encodeURIComponent(this.constructor.WORLD) : '');   // (?stats=1 on this page shows the viewer's numbers on screen)
     setTimeout(() => { if (!heard && !opened && this.door === d) fail('no answer from the island'); }, 20000);
   }
 
