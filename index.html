@@ -486,10 +486,13 @@ class Component extends DCLogic {
       setTimeout(() => this.closeDoor(), 2500);   // (pops the history entry, which closes)
     };
     // the world file, downloaded here so the ring is honest, handed over via the Cache API
-    const fetchWorld = async (url) => {
+    const fetchWorld = async (url, rawBytes) => {
       const res = await fetch(url);
       if (!res.ok || !res.body) throw new Error('world fetch ' + res.status);
-      const total = +res.headers.get('content-length') || 0;
+      // the reader yields decoded bytes; on a gzip host (GitHub Pages) content-length is the
+      // compressed size, so the viewer's own raw size (hello.bytes) is the honest denominator
+      const encoded = !!res.headers.get('content-encoding');
+      const total = (encoded && rawBytes) ? rawBytes : (+res.headers.get('content-length') || rawBytes || 0);
       const reader = res.body.getReader(), chunks = []; let got = 0;
       for (;;) { const { done, value } = await reader.read(); if (done) break; chunks.push(value); got += value.length; if (total) setBar(0.02 + 0.78 * got / total); }
       const blob = new Blob(chunks, { type: 'model/gltf-binary' });
@@ -507,7 +510,7 @@ class Component extends DCLogic {
       if (m.type === 'hello') {
         heard = true;
         let world = null;
-        try { world = await fetchWorld(m.glb); } catch (e) { console.warn('door: the viewer will download the world itself', e); }
+        try { world = await fetchWorld(m.glb, m.bytes || 0); } catch (e) { console.warn('door: the viewer will download the world itself', e); }
         frame.contentWindow.postMessage(world ? { isola: 'go', world } : { isola: 'go' }, location.origin);
         if (world) { setBar(0.80); creepTo(0.88); }   // decoding starts; the viewer's stages take it from here
       } else if (m.type === 'progress') { if (m.total) setBar(0.02 + 0.78 * m.loaded / m.total); }

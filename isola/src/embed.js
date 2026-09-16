@@ -6,7 +6,7 @@
 export const EMBED = new URLSearchParams(location.search).has('embed') && window.parent !== window;
 export const tellParent = (msg) => { if (EMBED) window.parent.postMessage({ isola: 'v1', ...msg }, location.origin); };
 // wait for the door's 'go' (2.5 s at most - an older page never answers); the Blob it carries, or null
-export function waitForDoor(glbAbs, build) {
+export function waitForDoor(glbAbs, build, bytes) {
   return new Promise((res) => {
     let blob = null;
     const t = setTimeout(() => res(blob), 2500);
@@ -16,6 +16,6 @@ export function waitForDoor(glbAbs, build) {
         clearTimeout(t); removeEventListener('message', onGo); res(blob);
       }
     });
-    tellParent({ type: 'hello', glb: glbAbs, build });
+    tellParent({ type: 'hello', glb: glbAbs, build, bytes });
   });
 }

@@ -167,9 +167,11 @@
 </details>
 <div id="loading">pouring the watercolours…</div>
 <script type="module">
-// the program lives in src/main.js; its build tag is the cache key (tests/build-tag.test.mjs
-// keeps this line and main.js's BUILD in step); ?cb=<x> busts it while developing
-import('./src/main.js?v=v243' + (new URLSearchParams(location.search).get('cb') ? '&cb=' + encodeURIComponent(new URLSearchParams(location.search).get('cb')) : ''));
+// the program is dist/main.js (one bundle: scripts/build.mjs); ?src=1 loads the unbundled
+// sources for development; the build tag is the cache key (tests/build-tag.test.mjs keeps this
+// line and main.js's BUILD in step); ?cb=<x> busts it while developing
+const q = new URLSearchParams(location.search);
+import((q.has('src') ? './src/main.js' : './dist/main.js') + '?v=v244' + (q.get('cb') ? '&cb=' + encodeURIComponent(q.get('cb')) : ''));
 </script>
 </body>
 </html>

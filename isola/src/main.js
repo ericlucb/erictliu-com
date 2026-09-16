@@ -6,22 +6,38 @@
 import * as THREE from 'three';
 import { OrbitControls } from '../vendor/OrbitControls.js';
 import { GLTFLoader } from '../vendor/GLTFLoader.js';
-import { DRACOLoader } from '../vendor/DRACOLoader.js';
 import { MeshoptDecoder } from '../vendor/meshopt_decoder.module.js';   // V216: EXT_meshopt_compression
 import { Reflector } from '../vendor/Reflector.js';
 import { validateWaterline, BOAT_WATER_MASK_GLSL } from './boat-water-mask.js';
-import { createLaundry } from './laundry.js?v=214';
+import { createLaundry } from './laundry.js';
+import { PAINTED_SUN_GLSL } from './painted-sun.js';
+import { BRANCH_WIND_GLSL } from './branch-wind.js';
+import { createTreeDynamics, stepTreeDynamics } from './tree-dynamics.js';
+import { applyTerrainProfile, flattenedHeight } from './terrain-profile.js';
+import { LEAF_WIND_GLSL } from './leaf-wind.js';
+import { benchLighting } from './bench-lighting.js';
+import { gardenLighting } from './garden-lighting.js';
+import { sillWind } from './sill-wind.js';
+import { chimneyLighting } from './chimney-lighting.js';
+import { SCENE_SHADOW_FRAG as SHADOW_FRAG, sceneLighting, castsSceneShadow } from './scene-lighting.js';
+import { plasterLighting } from './plaster-lighting.js';
+import boatWaterlineJson from '../boat-waterline.json' with { type: 'json' };
+import plasterColor from '../plaster-color.json' with { type: 'json' };
+import windowVariants from '../window-variants.json' with { type: 'json' };
+import treeVolumeData from '../tree-volume-lighting.json' with { type: 'json' };
+import treeCrownJson from '../tree-crown.json' with { type: 'json' };
+import rearEntryRoute from '../rear-entry-route.json' with { type: 'json' };
 import { bakeWorldTransform } from './bake-world-transform.js';
 import { EMBED, tellParent, waitForDoor } from './embed.js';
 import { BOAT, initBoat, updateBoat, boatify } from './boat.js';
 import { BLADE_LOD, applyBladeLod } from './blade-lod.js';
 import { failPanel, installLoadGuards } from './load-panel.js';
 import { releaseCpuCopies, halveTexture, halveTextures, releaseImages } from './memory.js';
-import { WORLD_TAG, resolveWorldUrl, worldBytes } from './world-file.js';
+import { WORLD_TAG, WORLD_BYTES, resolveWorldUrl, worldBytes } from './world-file.js';
 
 // cache-buster: one label per build, so a reload re-uses the cached 117 MB
 // GLB instead of fetching it again (v115 stamped the clock on every load)
-const BUILD = 'v243';
+const BUILD = 'v244';
 // V242: the world's parse finishes in ~200 ms now (meshopt), sooner than
 // this module finishes evaluating - it suspends on later top-level awaits -
 // so the load callback must wait for the module's last line, or it reads
@@ -35,9 +51,7 @@ const DEV = new URLSearchParams(location.search).has('dev');
 // announces its world file, waits for the parent to hand it over through the
 // Cache API, and reports progress and readiness by postMessage.
 if (DEV) document.body.classList.add('dev');
-const boatWaterlinePromise = fetch('./boat-waterline.json?v=' + BUILD)
-  .then(r => { if (!r.ok) throw new Error('Boat waterline failed to load'); return r.json(); })
-  .then(validateWaterline);
+const boatWaterlinePromise = Promise.resolve(boatWaterlineJson).then(validateWaterline);
 // V219 - THE BOAT BOBS. Small, slow, two-period heave with a roll about the
 // hull's long axis and a pitch across it (angles under 2 deg). The rope's
 // boat end rides along. The sea level itself is frozen (Eric, earlier), so
@@ -100,24 +114,22 @@ scene.background = new THREE.Color('#8b95ab');
 scene.fog = new THREE.Fog('#98a0b2', 900, 3400);
 
 const WINDOW_SKY = { value: null };
-const {PAINTED_SUN_GLSL}=await import('./painted-sun.js?v='+BUILD);
 const VISIBLE_SUN={value:new THREE.Vector3(.840,.242,.485).normalize()};
 const VISIBLE_SUN_ON={value:1};
-const {BRANCH_WIND_GLSL}=await import('./branch-wind.js?v='+BUILD);
-const {createTreeDynamics,stepTreeDynamics}=await import('./tree-dynamics.js?v='+BUILD);
-const {applyTerrainProfile,flattenedHeight}=await import('./terrain-profile.js?v='+BUILD);
-const TERRAIN_PROFILE=await fetch('./terrain-profile.json?v='+BUILD).then(r=>r.json());
+// V244: the two 256x256 height grids (collision, the terrain profile's
+// original ground) arrive as one binary at 0.1 mm (scripts/pack_grids.mjs);
+// the profile's scalars ride in its header
+const GRIDS = await fetch('./world-grids.bin?v=' + BUILD).then(async (r) => {
+  if (!r.ok) throw new Error('world-grids.bin ' + r.status);
+  const buf = await r.arrayBuffer(); const dv = new DataView(buf); const hl = dv.getUint32(0, true);
+  const hd = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 4, hl)).replace(/\0+$/, ''));
+  const grid = (meta, off) => { const q = new Int16Array(buf, off, meta.count); const h = new Float32Array(meta.count); for (let i = 0; i < meta.count; i++) h[i] = q[i] / hd.scale; return { N: meta.N, x0: meta.x0, z0: meta.z0, cw: meta.cw, ch: meta.ch, h }; };
+  const o1 = 4 + hl, o2 = o1 + hd.island.count * 2;
+  return { island: grid(hd.island, o1), ground: grid(hd.ground, o2), profile: hd.profile };
+});
+const TERRAIN_PROFILE = { ...GRIDS.profile, originalGround: GRIDS.ground };
 const HOME_DROP=TERRAIN_PROFILE.offsets.WEB_HM_home;
-const {LEAF_WIND_GLSL}=await import('./leaf-wind.js?v='+BUILD);
-const {benchLighting}=await import('./bench-lighting.js?v='+BUILD);
-const {gardenLighting}=await import('./garden-lighting.js?v='+BUILD);
-const {sillWind}=await import('./sill-wind.js?v='+BUILD);
-const {chimneyLighting}=await import('./chimney-lighting.js?v='+BUILD);
-const {SCENE_SHADOW_FRAG:SHADOW_FRAG,sceneLighting,castsSceneShadow}=await import('./scene-lighting.js?v=204-'+BUILD);
-const {plasterLighting} = await import('./plaster-lighting.js?v='+BUILD);
-const plasterColor = await fetch('./plaster-color.json?v='+BUILD).then(r=>r.json());
 const PLASTER_LIVE = {value:1};
-const windowVariants = await fetch('./window-variants.json?v='+BUILD).then(r=>r.json());
 for(const v of Object.values(windowVariants.views))for(const k of ['eye','target'])v[k][1]+=HOME_DROP;
 const EXTRA_TEXTURES = [];   // V240: textures loaded outside the GLB (the interior sheet, the sky band) join the memory passes
 const ROOM_PAINT={value:new THREE.TextureLoader().load('./interior-warm-v1.webp?v='+BUILD)};
@@ -201,11 +213,9 @@ ROOM_PAINT.value.colorSpace=THREE.SRGBColorSpace;
 const skyClouds = [];
 {
   const loader2 = new THREE.TextureLoader();
-  const texes = [0, 1, 2, 3, 4, 5].map(i => {
-    const t = loader2.load(`./clouds/paint_${i}.png?v=` + BUILD);   // cut from the backdrop painting
-    t.colorSpace = THREE.SRGBColorSpace;
-    return t;
-  });
+  // (the six cloud cut-outs load only when a PUFF asks for them - the list is
+  // empty since 2026-09-02 and the loads were six wasted requests)
+  const texes = new Proxy({}, { get: (_, i) => { const t = loader2.load(`./clouds/paint_${i}.png?v=` + BUILD); t.colorSpace = THREE.SRGBColorSpace; return t; } });
   // SCATTERED, DRAMATICALLY VARIED ('different shapes, some long some
   // wider, scattered around, some bigger some smaller'). The island is
   // ~90 m across, so clouds run 60-260 m - the old ones were 700 m
@@ -552,10 +562,7 @@ function fly(dt) {
 const COLLIDE = { grid: null, boxes: [], trunk: null, eye: 1.8, pad: 1.3 };
 window.COLLIDE = COLLIDE; window.groundY = (x, z) => groundY(x, z);   // inspectable from the console
 // the exporter ray-casts the bare island and ships the grid (island_height.json)
-fetch('./island_height.json?v=' + BUILD).then(r => r.ok ? r.json() : null).then(j => {
-  if (!j) return;
-  COLLIDE.grid = { N: j.N, x0: j.x0, z0: j.z0, cw: j.cw, ch: j.ch, h: Float32Array.from(j.h) };
-}).catch(() => {});
+COLLIDE.grid = GRIDS.island;
 function buildGroundGrid(o) {
   const N = 112, pos = o.geometry.attributes.position; o.updateWorldMatrix(true, false);
   const v = new THREE.Vector3(); const bb = new THREE.Box3().setFromObject(o);
@@ -813,7 +820,7 @@ const clothWind = new THREE.Vector2();
 const Cloth = createLaundry(THREE, (x,y,z) => {
   Wind.at(x,y,z,clothWind); return [clothWind.x,clothWind.y];
 }, new URLSearchParams(location.search).has('syncCloth') ? null
-   : { url: './src/cloth-worker.js?v=' + BUILD, dir: Wind.dir.toArray(), top: ISLAND_TOP, state: () => [Wind.U, Wind.adv] });
+   : { url: new URL('./cloth-worker.js?v=' + BUILD, import.meta.url).href, dir: Wind.dir.toArray(), top: ISLAND_TOP, state: () => [Wind.U, Wind.adv] });
 
 // SUN SHADOWS ON THE PAINTED MEADOW: blades and petals are unlit
 // MeshBasic (the painting IS their light), so three's shadow pipeline
@@ -858,7 +865,6 @@ function shorify(material) {
   };
   material.needsUpdate = true;
 }
-const treeVolumeData = await fetch('./tree-volume-lighting.json?v=146').then(r=>r.json());
 const TREE_VOLUME = {
   centers: {value:treeVolumeData.centers.map(p=>new THREE.Vector3(p[0],p[1]+TERRAIN_PROFILE.offsets.WEB_HM_tree_og,p[2]))},
   radii: {value:treeVolumeData.radii.map(p=>new THREE.Vector3(...p))},
@@ -925,7 +931,7 @@ const OIL_SUN = VISIBLE_SUN;
 // V219 spread). Leaves keep their depth, so the crown stays a solid from
 // every other direction; only the painting's gaps become see-through.
 const CROWN = { mask: { value: null }, box: { value: new THREE.Vector4(0, 0, 1, 1) } };
-{ const cb = await fetch('./tree-crown.json?v=' + BUILD).then(r => r.json());
+{ const cb = treeCrownJson;
   CROWN.box.value.set(cb.x0, cb.y0, 1 / (cb.x1 - cb.x0), 1 / (cb.y1 - cb.y0));
   CROWN.mask.value = await new Promise((res, rej) => new THREE.TextureLoader().load('./tree-crown-mask.png?v=' + BUILD, t => {
     t.minFilter = THREE.LinearFilter; t.magFilter = THREE.LinearFilter; t.generateMipmaps = false;
@@ -1076,7 +1082,6 @@ const STEP = { c: { value: new THREE.Vector4(0, 0, 1, 0) }, half: { value: new T
 // shader side: blades/petals read the meadow field texture, the tree
 // reads its modal state - no procedural motion left in GLSL
 // The centered rear doorway moves only the last three metres of its tread.
-const rearEntryRoute = await fetch('./rear-entry-route.json?v='+BUILD).then(r=>r.json());
 const REAR_ENTRY = {value:rearEntryRoute.points.slice(0,-1).map((p,i)=>new THREE.Vector4(...p,...rearEntryRoute.points[i+1]))};
 const WIND_GLSL = `
   varying vec2 vEntryRest;
@@ -1554,6 +1559,7 @@ function splitBladeChunks(o) {
     return g;
   });
   o.geometry = geoms[0];
+  g0.setIndex(null); for (const k of Object.keys(g0.attributes)) g0.deleteAttribute(k);   // V244: the chunks own the views; the base buffers go when they upload
   const meshes = [o];
   for (let i = 1; i < geoms.length; i++) {
     const m = new THREE.Mesh(geoms[i], o.material);
@@ -1582,7 +1588,6 @@ function bakeNodeTransform(o) {
 
 installLoadGuards(renderer);
 
-const draco = new DRACOLoader().setDecoderPath('./vendor/draco/');
 // V216: the shipped GLB is meshopt-compressed with quantized normals/uv/colour
 // (scripts/optimize_glb.sh); the Draco loader stays for an unoptimised export
 // V241 - THE LOAD NEVER BLOCKS THE PAGE. The door's ring (and the parent
@@ -1602,14 +1607,12 @@ const maybeYield = async (progress) => { const now = performance.now(); if (now 
 const T_LOAD = { t0: performance.now() };
 if (DEV) {   // where the parse goes: first call / last resolve of the two decoders and of the image decode
   const wrap = (obj, key, tag) => { const orig = obj[key]; if (!orig) return; obj[key] = function (...a) { const t = performance.now(); if (!T_LOAD[tag + 'First']) T_LOAD[tag + 'First'] = t; T_LOAD[tag + 'N'] = (T_LOAD[tag + 'N'] || 0) + 1; const r = orig.apply(this, a); return r && r.then ? r.then((v) => { T_LOAD[tag + 'Last'] = performance.now(); return v; }) : r; }; };
-  wrap(MeshoptDecoder, 'decodeGltfBufferAsync', 'meshopt'); wrap(window, 'createImageBitmap', 'bitmap'); wrap(draco, 'decodeGeometry', 'draco');
-  const od = draco.decodeGeometry.bind(draco); T_LOAD.dracoCalls = [];   // per mesh: compressed bytes, decoded vertices, wall ms
-  draco.decodeGeometry = function (buffer, cfg) { const t = performance.now(); return od(buffer, cfg).then((g) => { T_LOAD.dracoCalls.push({ kb: Math.round(buffer.byteLength / 1024), verts: g.attributes.position ? g.attributes.position.count : 0, attrs: Object.keys(g.attributes).length, ms: Math.round(performance.now() - t) }); return g; }); };
+  wrap(MeshoptDecoder, 'decodeGltfBufferAsync', 'meshopt'); wrap(window, 'createImageBitmap', 'bitmap');
 }
-const loader = new GLTFLoader().setDRACOLoader(draco).setMeshoptDecoder(MeshoptDecoder);
+const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);   // V242: meshopt only, no Draco
 const { WORLD_URL, GLB_URL, GLB_ABS } = resolveWorldUrl(Q, DEV);
 window.WORLD_URL = WORLD_URL;
-let WORLD_BLOB = EMBED ? await waitForDoor(GLB_ABS, BUILD) : null;   // the door's bytes, if it answered
+let WORLD_BLOB = EMBED ? await waitForDoor(GLB_ABS, BUILD, WORLD_BYTES) : null;   // the door's bytes, if it answered
 let worldBuf;
 try {
   worldBuf = await worldBytes({ url: GLB_URL, abs: GLB_ABS, blob: WORLD_BLOB }, (loaded, total) => {
@@ -1626,8 +1629,16 @@ T_LOAD.fetched = performance.now();
 if (worldBuf) loader.parse(worldBuf, './', async (gltf) => {
   worldBuf = null; WORLD_BLOB = null;   // the parser holds what it needs; 69 MB less for the GC to walk during the build
   T_LOAD.parsed = performance.now();
+  MeshoptDecoder.useWorkers(0);          // V244: the decode is done; the workers' heaps (~100 MB) go with them
   await MODULE_READY;
-  applyTerrainProfile(gltf.scene,THREE,TERRAIN_PROFILE);
+  // V244 - HOLD NOTHING BUT THE SCENE. `gltf` carries the parser and its cache
+  // of every decoded buffer plus the file itself (~200 MB). Every closure
+  // made in here (a material's onBeforeCompile lives as long as the
+  // material) shares this function's context, so a single reference to
+  // `gltf` from any of them kept all of it alive forever. Only `root` is
+  // used below; `gltf` is dropped here.
+  const root = gltf.scene; gltf = null;
+  applyTerrainProfile(root,THREE,TERRAIN_PROFILE);
   // every mesh in traversal order, visited one at a time so the meadow's
   // expansion can yield (three's traverse is synchronous; the list is taken
   // first, so the chunk meshes splitBladeChunks adds are not revisited)
@@ -2162,7 +2173,7 @@ if (worldBuf) loader.parse(worldBuf, './', async (gltf) => {
     // and triangle pattern. Expand the table per vertex, generate the index,
     // split into the spatial chunks; the blade shader runs in ROOT_REL mode.
     if (o.name === 'WEB_meadow' || o.parent?.name === 'WEB_meadow') {
-      const table = gltf.scene.getObjectByName('WEB_meadow_table');
+      const table = root.getObjectByName('WEB_meadow_table');
       const tg = table && (table.geometry || table.children[0]?.geometry);
       if (!tg) { console.warn('meadow repack: no WEB_meadow_table'); return; }
       const g = o.geometry, ex = g.userData || {};   // three puts primitive extras on the geometry
@@ -2496,18 +2507,18 @@ if (worldBuf) loader.parse(worldBuf, './', async (gltf) => {
       clouds.push(o);
     }
   };
-  const meshList = []; gltf.scene.traverse((o) => { if (o.isMesh) meshList.push(o); });
+  const meshList = []; root.traverse((o) => { if (o.isMesh) meshList.push(o); });
   const slow = [];
   for (const o of meshList) { lastYield = performance.now(); const tv = performance.now(); await visit(o); if (DEV) slow.push([o.name, Math.round(performance.now() - tv)]); }
   if (DEV) T_LOAD.visits = slow.sort((a, b) => b[1] - a[1]).slice(0, 8);
   T_LOAD.visited = performance.now();
-  scene.add(gltf.scene);
-  markBareTwigs(gltf.scene);
+  scene.add(root);
+  markBareTwigs(root);
   T_LOAD.twigs = performance.now();
   // V221: the step slab (WEB_HM_home_garden_27, 396 triangles) spans kit-local
   // x 1.379..3.079, plan y -1.49..-0.704 (GLB local z 0.704..1.49); its
   // footprint plus a 6 cm margin, in world, for the blade cull
-  { const house = gltf.scene.getObjectByName('WEB_HM_home');
+  { const house = root.getObjectByName('WEB_HM_home');
     if (house) {
       house.updateWorldMatrix(true, false);
       const c = house.localToWorld(new THREE.Vector3(2.229, 0, 1.097));
@@ -2519,8 +2530,8 @@ if (worldBuf) loader.parse(worldBuf, './', async (gltf) => {
   console.info('shadow-audit-v166 '+JSON.stringify(worldMeshes.map(o=>({name:o.name,...o.userData.shadowRole,movingDepth:!!o.customDepthMaterial}))));
   // the meadow field covers the island's footprint
   {
-    const isl = gltf.scene.getObjectByName('WEB_island');
-    const bb = new THREE.Box3().setFromObject(isl || gltf.scene);
+    const isl = root.getObjectByName('WEB_island');
+    const bb = new THREE.Box3().setFromObject(isl || root);
     Grass.init(bb);
   }
   window.S = scene; window.CLOUDS = clouds; window.RENDERER = renderer;
@@ -2892,6 +2903,7 @@ $('c-rear').addEventListener('click', () => {
   eye.y+=HOME_DROP; target.y+=HOME_DROP;
   window.LOOKAT(...eye.toArray(), ...target.toArray());
 });
+if (DEV) {   // the review cameras below feed the dev panel only (V244: not fetched for visitors)
 const rearRemodelCameras = await fetch('./rear-remodel-cameras.json?v='+BUILD).then(r=>r.json());
 for(const v of Object.values(rearRemodelCameras))for(const k of ['eye','target'])v[k][1]+=HOME_DROP;
 for (const [id,key] of [['c-chimney','chimney'],['c-chimney-back','chimney_reverse'],['c-rear-detail','rear_detail']]) {
@@ -2984,6 +2996,7 @@ $('c-review').addEventListener('change', () => {
   camera.updateProjectionMatrix();
   window.LOOKAT(...view.eye, ...view.target);
 });
+}
 $('c-plaster').addEventListener('click',()=>{setCamMode('fly');camera.clearViewOffset();camera.fov=FLY.fov0=50;camera.updateProjectionMatrix();window.LOOKAT(11.65,5.15,-6.06,5.665,3.64,-6.579);});
 $('c-bench').addEventListener('click',()=>{setCamMode('fly');camera.clearViewOffset();camera.fov=FLY.fov0=50;camera.updateProjectionMatrix();window.LOOKAT(17.0,4.0,5.2,23.42,2.2,3.25);});
 $('c-tree').addEventListener('click', () => {

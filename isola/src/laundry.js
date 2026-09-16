@@ -1,4 +1,4 @@
-import { ClothPatch } from './cloth-physics.js?v=214';
+import { ClothPatch } from './cloth-physics.js';
 import { bakeWorldTransform } from './bake-world-transform.js';
 
 // V214: the garment rig in the flat form the worker and the identity test
