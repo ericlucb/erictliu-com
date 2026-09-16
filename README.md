@@ -59,14 +59,18 @@ Pushing to `main` publishes to GitHub Pages, live at https://erictliu.com.
 ## Icons and link preview
 
 `icon.svg`, `favicon.ico`, `apple-touch-icon.png` and `og.png` are all
-generated from the portrait already in `index.html` by `make-icons.py`:
+generated from the portrait already in `index.html` by `make-icons.mjs`,
+which renders the real page in Chrome (puppeteer from `../isola-quieta`):
 
 ```bash
-python3 make-icons.py
+node make-icons.mjs
 ```
 
-Re-run it after changing the drawing. It needs `rsvg-convert` and ImageMagick
-(`brew install librsvg imagemagick`).
+The favicons pose the head a little to its left; `og.png`, the link preview
+(1200 x 630), is the page at its resting angle with the door, the icon row
+and the links hidden. Re-run it after changing the drawing. The older
+`make-icons.py` (rsvg + ImageMagick) drew a heavier, three-quarter portrait
+and is no longer what ships.
 
 ## Domain
 
@@ -119,9 +123,9 @@ The icon row under the portrait (dance, draw, shuffle, reset, and the gear
 for the sliders and swatches) shows a word under the icon you hover; on a
 phone the glyphs stand alone, the face fills the width, and DRAW's bar runs
 along the bottom (draw.js no longer picks the left side in portrait; the
-page scales the bar to fit). The favicons come from `make-icons.mjs`
-(Chrome only, the head posed a little to its left) or `make-icons.py`
-(rsvg + ImageMagick, also writes og.png).
+page scales the bar to fit). The favicons and the link preview come from `make-icons.mjs` (Chrome; the
+favicons posed a little to the head's left, the preview at the page's
+resting angle).
 
 How the door works (`openDoor()` in `index.html`): nothing is fetched until
 the click. Then the ENTER link becomes a small door with a ring around it
