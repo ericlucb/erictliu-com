@@ -12,6 +12,12 @@ import { Reflector } from '../vendor/Reflector.js';
 import { validateWaterline, BOAT_WATER_MASK_GLSL } from './boat-water-mask.js';
 import { createLaundry } from './laundry.js?v=214';
 import { bakeWorldTransform } from './bake-world-transform.js';
+import { EMBED, tellParent, waitForDoor } from './embed.js';
+import { BOAT, initBoat, updateBoat, boatify } from './boat.js';
+import { BLADE_LOD, applyBladeLod } from './blade-lod.js';
+import { failPanel, installLoadGuards } from './load-panel.js';
+import { releaseCpuCopies, halveTexture, halveTextures, releaseImages } from './memory.js';
+import { WORLD_TAG, resolveWorldUrl, worldBytes } from './world-file.js';
 
 // cache-buster: one label per build, so a reload re-uses the cached 117 MB
 // GLB instead of fetching it again (v115 stamped the clock on every load)
@@ -22,19 +28,12 @@ const BUILD = 'v243';
 // constants still in their temporal dead zone (it did: 'Cannot access
 // _camF before initialization', and the island 'could not load').
 let moduleReadyResolve; const MODULE_READY = new Promise((r) => { moduleReadyResolve = r; });
-// V239: the world file is versioned by its own content, not by BUILD - a
-// viewer-only deploy must not make every visitor download 58 MB again, and
-// the door's cache is keyed by this exact URL. scripts/stamp_world.mjs
-// writes it from the file's sha256 (optimize_glb.sh runs it; a test checks it).
-const WORLD_TAG = '2c36cb00';
 // ?dev=1 shows the full LOOK panel (cameras, review views, painterly dials);
 // visitors get only the settings control (V207)
 const DEV = new URLSearchParams(location.search).has('dev');
 // V233: ?embed=1 - the viewer is an iframe behind erictliu.com's door. It
 // announces its world file, waits for the parent to hand it over through the
 // Cache API, and reports progress and readiness by postMessage.
-const EMBED = new URLSearchParams(location.search).has('embed') && window.parent !== window;
-const tellParent = (msg) => { if (EMBED) window.parent.postMessage({ isola: 'v1', ...msg }, location.origin); };
 if (DEV) document.body.classList.add('dev');
 const boatWaterlinePromise = fetch('./boat-waterline.json?v=' + BUILD)
   .then(r => { if (!r.ok) throw new Error('Boat waterline failed to load'); return r.json(); })
@@ -43,44 +42,7 @@ const boatWaterlinePromise = fetch('./boat-waterline.json?v=' + BUILD)
 // hull's long axis and a pitch across it (angles under 2 deg). The rope's
 // boat end rides along. The sea level itself is frozen (Eric, earlier), so
 // this is the only place the water's motion reaches a solid.
-const BOAT = { c: { value: new THREE.Vector3(0, 0.02, 0) }, axis: { value: new THREE.Vector2(1, 0) },
-               heave: { value: 0 }, roll: { value: 0 }, pitch: { value: 0 }, ready: false };
-boatWaterlinePromise.then(d => {
-  BOAT.c.value.set(d.center[0], 0.02, d.center[1]);
-  let best = 0, ax = [1, 0];
-  for (const a of d.polygon) for (const b of d.polygon) {
-    const dx = b[0] - a[0], dz = b[1] - a[1], l = dx * dx + dz * dz;
-    if (l > best) { best = l; ax = [dx, dz]; }
-  }
-  BOAT.axis.value.set(ax[0], ax[1]).normalize(); BOAT.ready = true;
-}).catch(() => {});
-function updateBoat(t) {
-  BOAT.heave.value = 0.022 * Math.sin(t * 0.85) + 0.010 * Math.sin(t * 1.9 + 1.3);
-  BOAT.roll.value  = 0.026 * Math.sin(t * 0.62 + 0.7) + 0.011 * Math.sin(t * 1.45);
-  BOAT.pitch.value = 0.013 * Math.sin(t * 0.50 + 2.0);
-}
-function boatify(material, o, rope) {
-  o.updateWorldMatrix(true, false);
-  const inv = { value: o.matrixWorld.clone().invert() };
-  const prev = material.onBeforeCompile;
-  material.onBeforeCompile = (sh) => {
-    if (prev) prev(sh);
-    Object.assign(sh.uniforms, { uBoatC: BOAT.c, uBoatAxis: BOAT.axis, uBoatHeave: BOAT.heave,
-                                 uBoatRoll: BOAT.roll, uBoatPitch: BOAT.pitch, uBoatInv: inv });
-    sh.vertexShader = 'uniform vec3 uBoatC; uniform vec2 uBoatAxis; uniform float uBoatHeave, uBoatRoll, uBoatPitch; uniform mat4 uBoatInv;\n'
-      + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
-      {
-        vec3 wpB = (modelMatrix * vec4(transformed, 1.0)).xyz;
-        vec3 rB = wpB - uBoatC;
-        float wB = ${rope ? '1.0 - smoothstep(0.9, 2.4, length(rB.xz))' : '1.0'};
-        vec3 ax = vec3(uBoatAxis.x, 0.0, uBoatAxis.y), ay = vec3(-uBoatAxis.y, 0.0, uBoatAxis.x);
-        rB += cross(ax * (uBoatRoll * wB), rB) + cross(ay * (uBoatPitch * wB), rB);
-        rB.y += uBoatHeave * wB;
-        transformed = (uBoatInv * vec4(rB + uBoatC, 1.0)).xyz;
-      }`);
-  };
-  material.customProgramCacheKey = () => 'boat-v219-' + (rope ? 'rope' : 'hull');
-}
+initBoat(boatWaterlinePromise);
 
 
 // ?capture=1 keeps the drawing buffer so canvas.toDataURL() returns the frame
@@ -158,7 +120,6 @@ const PLASTER_LIVE = {value:1};
 const windowVariants = await fetch('./window-variants.json?v='+BUILD).then(r=>r.json());
 for(const v of Object.values(windowVariants.views))for(const k of ['eye','target'])v[k][1]+=HOME_DROP;
 const EXTRA_TEXTURES = [];   // V240: textures loaded outside the GLB (the interior sheet, the sky band) join the memory passes
-const isBitmapImage = (im) => !!im && ((typeof ImageBitmap !== 'undefined' && im instanceof ImageBitmap) || im instanceof HTMLImageElement || im instanceof HTMLCanvasElement);
 const ROOM_PAINT={value:new THREE.TextureLoader().load('./interior-warm-v1.webp?v='+BUILD)};
 EXTRA_TEXTURES.push(ROOM_PAINT.value);
 ROOM_PAINT.value.colorSpace=THREE.SRGBColorSpace;
@@ -1050,26 +1011,6 @@ function tierStep(rawMs, now) {          // called every loop frame once the wor
   while (TIER.step < TIER.ladder.length) { if (tierApply(TIER.ladder[TIER.step++])) { TIER.lastStep = now; break; } }
 }
 window.TIER = TIER; window.applyDpr = applyDpr;
-const BLADE_LOD = [];                 // [{ mesh, c }] - c.lodR1 sorted, c.lodEnd = index end per blade
-function bladeKeepAt(d) {             // the shader's keep(lodDist) with uLod = 1
-  const t = Math.min(Math.max((d - 45) / 65, 0), 1);
-  return 1 - 0.75 * t * t * (3 - 2 * t);
-}
-function applyBladeLod(cap) {
-  if (!BLADE_LOD.length) return;
-  const full = window.LOD_RANGE_OFF || LOD.value < 0.5 && cap >= 1;
-  const cx = camera.position.x, cz = camera.position.z;   // the mirror camera shares the eye's xz
-  for (const { mesh, c } of BLADE_LOD) {
-    const r1 = c.lodR1, nb = r1.length;
-    let n = nb;
-    if (!full) {
-      const dx = Math.max(c.min[0] - cx, 0, cx - c.max[0]), dz = Math.max(c.min[2] - cz, 0, cz - c.max[2]);
-      const kmax = Math.min(LOD.value < 0.5 ? 1 : bladeKeepAt(Math.hypot(dx, dz)), cap) + 3e-5;   // + a float32 ulp margin
-      if (kmax < 1) { let lo = 0, hi = nb; while (lo < hi) { const m = (lo + hi) >> 1; if (r1[m] > kmax) hi = m; else lo = m + 1; } n = lo; }
-    }
-    mesh.geometry.setDrawRange(0, n ? c.lodEnd[n - 1] : 0);
-  }
-}
 // V224 (Eric: 'there shouldn't be these weird random branches that look
 // stripped'): the tree model carries twig brooms that never had leaves, and
 // the crown mask exposes more of them at the fringe. At load, every bark
@@ -1639,31 +1580,7 @@ function bakeNodeTransform(o) {
 // built by blender/scripts/import_generated.py and shipped in the GLB - so
 // the window recesses read as dark rooms in every renderer, not just here)
 
-// ROBUSTNESS (ported from the Codex pass, PLAN_V4 'viewer & controls'): a
-// failed GLB, a script error during load, or a lost GL context used to leave
-// 'pouring the watercolours…' on screen forever. One panel, one button.
-function failPanel(msg) {
-  tellParent({ type: 'error', message: msg });
-  let el = document.getElementById('loading');
-  if (!el) { el = document.createElement('div'); el.id = 'loading'; document.body.appendChild(el); }
-  el.style.opacity = 1; el.textContent = msg + ' ';
-  const b = document.createElement('button'); b.textContent = 'Try again';   // textContent above cleared any earlier one
-  b.style.font = 'inherit'; b.style.marginLeft = '8px';
-  b.addEventListener('click', () => location.reload());
-  el.appendChild(b);
-}
-function stillLoading() { const el = document.getElementById('loading'); return !!el && el.isConnected && el.style.opacity !== '0'; }
-addEventListener('error', () => { if (stillLoading()) failPanel('The island could not load.'); });
-addEventListener('unhandledrejection', () => { if (stillLoading()) failPanel('The island could not load.'); });
-renderer.domElement.addEventListener('webglcontextlost', (e) => { e.preventDefault(); failPanel('The graphics context was lost.'); });
-// r164 re-initialises the renderer on restore and the scene keeps running: drop the panel.
-// REMOVE it, as the load path does - a faded #loading is still a full-screen
-// fixed div on top of the canvas and would swallow every drag and wheel.
-renderer.domElement.addEventListener('webglcontextrestored', () => {
-  // V240: the CPU copies were released after upload, so nothing can be
-  // re-uploaded - start over (the door's cache makes that cheap)
-  location.reload();
-});
+installLoadGuards(renderer);
 
 const draco = new DRACOLoader().setDecoderPath('./vendor/draco/');
 // V216: the shipped GLB is meshopt-compressed with quantized normals/uv/colour
@@ -1690,121 +1607,12 @@ if (DEV) {   // where the parse goes: first call / last resolve of the two decod
   draco.decodeGeometry = function (buffer, cfg) { const t = performance.now(); return od(buffer, cfg).then((g) => { T_LOAD.dracoCalls.push({ kb: Math.round(buffer.byteLength / 1024), verts: g.attributes.position ? g.attributes.position.count : 0, attrs: Object.keys(g.attributes).length, ms: Math.round(performance.now() - t) }); return g; }); };
 }
 const loader = new GLTFLoader().setDRACOLoader(draco).setMeshoptDecoder(MeshoptDecoder);
-// V240 - MEMORY PASSES (see MEMORY_TIER). three keeps every attribute's
-// typed array after the upload, for re-uploads and CPU reads; after load
-// nothing here reads geometry but the cloth. Freed on upload with three's
-// own onUpload pattern; bounds are computed first so the cull never needs
-// the array; a lost context reloads the page instead of re-uploading.
-function disposeArray() { this.array = null; }
-function releaseCpuCopies(root, keep) {
-  let bytes = 0; const seen = new Set();
-  root.traverse(o => {
-    if (!o.isMesh || !o.geometry || keep.has(o.geometry)) return;
-    const g = o.geometry;
-    if (!g.boundingSphere) g.computeBoundingSphere();
-    for (const a of Object.values(g.attributes)) {
-      if (a.isInterleavedBufferAttribute) {           // meshopt's padded streams: one buffer behind several attributes
-        const d = a.data; if (!d.array || seen.has(d)) continue;
-        seen.add(d); bytes += d.array.byteLength; d.onUpload(disposeArray); continue;
-      }
-      if (!a.array || seen.has(a)) continue;
-      seen.add(a); bytes += a.array.byteLength; a.onUpload(disposeArray);
-    }
-    if (g.index && g.index.array && !seen.has(g.index)) { seen.add(g.index); bytes += g.index.array.byteLength; g.index.onUpload(disposeArray); }
-  });
-  return bytes;
-}
-function forEachTexture(root, fn) {
-  const seen = new Set();
-  const visit = (t) => { if (t && t.isTexture && !t.isRenderTargetTexture && !seen.has(t)) { seen.add(t); fn(t); } };
-  root.traverse(o => {
-    const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
-    for (const m of mats) { for (const k of ['map', 'alphaMap', 'emissiveMap', 'normalMap', 'roughnessMap']) visit(m[k]); if (m.uniforms) for (const u of Object.values(m.uniforms)) visit(u && u.value); }
-  });
-  for (const t of EXTRA_TEXTURES) visit(t);
-}
-function halveTexture(t) {
-  const im = t.image; if (t.isDataTexture || !isBitmapImage(im) || im.width < 2048) return false;
-  const c = document.createElement('canvas'); c.width = im.width >> 1; c.height = im.height >> 1;
-  c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
-  if (im.close) im.close();
-  t.image = c; t.needsUpdate = true; return true;
-}
-function halveTextures(root) { let n = 0; forEachTexture(root, t => { if (halveTexture(t)) n++; }); console.info('memory tier: ' + n + ' textures halved'); }
-// after the upload the decoded image is dead weight (a 2048^2 bitmap is
-// 16 MB); keep only its size, which is all three reads without an update
-// Only textures the GPU already holds (renderer.properties knows), never a
-// DataTexture (the wind field re-uploads every frame from image.data) or a
-// canvas texture that may be redrawn. Run again later: a texture first seen
-// from another eye uploads then.
-function releaseImages(root) {
-  let n = 0;
-  forEachTexture(root, t => {
-    const im = t.image;
-    if (t.isDataTexture || t.isCanvasTexture || !isBitmapImage(im)) return;
-    if (!renderer.properties.get(t).__webglTexture) return;
-    const w = im.width, h = im.height;   // (read before close(): a closed bitmap reports 0x0)
-    if (im.close) im.close();
-    t.image = { width: w, height: h }; n++;
-  });
-  if (n) console.info('memory: ' + n + ' decoded images released after upload');
-  return n;
-}
-// V233: erictliu.com's door downloads the world while it opens and parks it
-// in the Cache API under this exact URL; if it is there, load it from the
-// blob and skip the second download (the HTTP cache usually hits too, but
-// GitHub Pages' max-age is only ten minutes)
-// (dev: ?cb=<anything> also busts the world file's cache, so a swapped
-// island_world.glb loads without a BUILD bump)
-const GLB_CB = DEV && new URLSearchParams(location.search).get('cb');
-// V238 - THE WORLD OFF THE SITE. ?world=<https URL> names a copy of the world
-// file hosted elsewhere (Cloudflare R2 with a CORS rule for the site, see
-// docs/PERF-2026-09-15.md); the door passes it through and downloads it with
-// the same progress ring. Hosts are allow-listed so a shared link cannot
-// point the viewer at an arbitrary file. Anything else: the file beside
-// this page, as always.
-const WORLD_HOSTS = ['erictliu.com', 'r2.dev', 'r2.cloudflarestorage.com', 'objects.githubusercontent.com'];
-const WORLD_URL = (() => {
-  const w = new URLSearchParams(location.search).get('world'); if (!w) return null;
-  try { const u = new URL(w); if (u.protocol === 'https:' && WORLD_HOSTS.some(h => u.hostname === h || u.hostname.endsWith('.' + h))) return u.href; } catch (e) {}
-  console.warn('world: ignoring ' + w + ' (host not allowed)'); return null;
-})();
-const GLB_URL = WORLD_URL || './' + (DEV && Q.get('glbfile') || 'island_world.glb') + '?v=' + WORLD_TAG + (GLB_CB ? '&cb=' + encodeURIComponent(GLB_CB) : '');   // dev: ?glbfile=<name> loads another world file beside the page (A/B)
-const GLB_ABS = new URL(GLB_URL, location.href).href;
+const { WORLD_URL, GLB_URL, GLB_ABS } = resolveWorldUrl(Q, DEV);
 window.WORLD_URL = WORLD_URL;
-let WORLD_BLOB = null;   // V240: the door hands the downloaded file over directly; the cache is for next time
-if (EMBED) {
-  // the door downloads the world with a progress bar and puts it in the
-  // Cache API under GLB_ABS, then says go; if nothing answers (an older
-  // page), load it ourselves after a moment
-  await new Promise((res) => {
-    const t = setTimeout(res, 2500);
-    addEventListener('message', function onGo(ev) {
-      if (ev.origin === location.origin && ev.data && ev.data.isola === 'go') { if (ev.data.world instanceof Blob) WORLD_BLOB = ev.data.world; clearTimeout(t); removeEventListener('message', onGo); res(); }
-    });
-    tellParent({ type: 'hello', glb: GLB_ABS, build: BUILD });
-  });
-}
-// V241: the bytes come from the door's Blob, the door's cache, or a fetch
-// with a byte count (the standalone viewer shows the same percentage), and
-// go to loader.parse as one ArrayBuffer - no object URL round trip.
-async function worldBytes(onProgress) {
-  if (WORLD_BLOB) { console.info('island_world.glb: handed over by the door'); return WORLD_BLOB.arrayBuffer(); }
-  try {
-    if (window.caches) { const hit = await caches.match(GLB_ABS); if (hit) { console.info('island_world.glb: from the door\'s cache'); return hit.arrayBuffer(); } }
-  } catch (e) { console.warn('cache lookup failed', e); }
-  const res = await fetch(GLB_URL);
-  if (!res.ok) throw new Error('island_world.glb ' + res.status);
-  const total = +res.headers.get('content-length') || 0;
-  if (!res.body) return res.arrayBuffer();
-  const reader = res.body.getReader(), chunks = []; let got = 0;
-  for (;;) { const { done, value } = await reader.read(); if (done) break; chunks.push(value); got += value.length; if (total) onProgress(got, total); }
-  const out = new Uint8Array(got); let off = 0; for (const c of chunks) { out.set(c, off); off += c.length; }
-  return out.buffer;
-}
+let WORLD_BLOB = EMBED ? await waitForDoor(GLB_ABS, BUILD) : null;   // the door's bytes, if it answered
 let worldBuf;
 try {
-  worldBuf = await worldBytes((loaded, total) => {
+  worldBuf = await worldBytes({ url: GLB_URL, abs: GLB_ABS, blob: WORLD_BLOB }, (loaded, total) => {
     document.getElementById('loading').textContent = `pouring the watercolours… ${Math.round(100 * loaded / total)}%`;
     tellParent({ type: 'progress', loaded, total });
   });
@@ -2165,7 +1973,7 @@ if (worldBuf) loader.parse(worldBuf, './', async (gltf) => {
         }`;
       // V217: flag the mirror pass for the blade shader (see MIRROR)
       { const seaRender = sea.onBeforeRender;
-        sea.onBeforeRender = function (...a) { MIRROR.value = 1; applyBladeLod(MIRROR_KEEP.value); try { seaRender.apply(this, a); } finally { MIRROR.value = 0; applyBladeLod(1); } }; }
+        sea.onBeforeRender = function (...a) { MIRROR.value = 1; applyBladeLod(camera, MIRROR_KEEP.value, LOD.value >= 0.5, !!window.LOD_RANGE_OFF); try { seaRender.apply(this, a); } finally { MIRROR.value = 0; applyBladeLod(camera, 1, LOD.value >= 0.5, !!window.LOD_RANGE_OFF); } }; }
       scene.add(sea);
       seaMesh = sea;
       o.visible = false;
@@ -2720,7 +2528,7 @@ if (worldBuf) loader.parse(worldBuf, './', async (gltf) => {
   window.PHYS = { Wind, Grass, Tree, Cloth };
   // live sun is the default mode - apply it once the world exists
   $('c-light').dispatchEvent(new Event('change'));
-  if (MEMORY_TIER) halveTextures(scene);
+  if (MEMORY_TIER) halveTextures(scene, EXTRA_TEXTURES);
   const freed = Q.has('nofree') ? 0 : releaseCpuCopies(scene, new Set([(Cloth.mesh || Cloth.pending) && (Cloth.mesh || Cloth.pending).geometry]));   // dev: ?nofree=1 keeps the CPU copies for inspection
   console.info(`memory: ${(freed / 1048576).toFixed(0)} MB of CPU geometry copies released after upload`);
   // V240: warm the shaders and uploads BEFORE saying ready, so the door
@@ -2733,8 +2541,8 @@ if (worldBuf) loader.parse(worldBuf, './', async (gltf) => {
       const a = performance.now(); drawFrame(); ms = performance.now() - a;
       await new Promise(r => setTimeout(r, 0));
     }
-    releaseImages(scene);
-    setTimeout(() => releaseImages(scene), 15000);   // whatever another eye has uploaded since
+    releaseImages(scene, renderer, EXTRA_TEXTURES);
+    setTimeout(() => releaseImages(scene, renderer, EXTRA_TEXTURES), 15000);   // whatever another eye has uploaded since
     T_LOAD.ready = performance.now();
     const span = (a, b) => Math.round(T_LOAD[b] - T_LOAD[a]);
     console.info(`load: fetch ${span('t0', 'fetched')} ms, parse ${span('fetched', 'parsed')} ms, build ${span('parsed', 'visited')} ms, finish ${span('visited', 'ready')} ms (warm-up included)`);
@@ -3367,7 +3175,7 @@ function drawFrame() {
   updateBoat(WIND.t.value);
   LOD.value = window.LOD_OFF ? 0 : 1;
   if (window.MIRROR_KEEP !== undefined) MIRROR_KEEP.value = window.MIRROR_KEEP;
-  applyBladeLod(1);
+  applyBladeLod(camera, 1, LOD.value >= 0.5, !!window.LOD_RANGE_OFF);
   if (painterly) {
     renderer.setRenderTarget(rt);
     renderer.render(scene, camera);
