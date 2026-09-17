@@ -508,6 +508,8 @@ class Component extends DCLogic {
   static WORLD = '';
   static WORLD_TAG = '291ea798';
   static WORLD_BYTES = 42981988;
+  static WORLD_TAG_PHONE = 'e7ca17a9';   // the phone's core (KTX2 textures), chosen at the click on a touch device
+  static WORLD_BYTES_PHONE = 40782948;
   openDoor() {
     if (this.door) return;
     const en = document.getElementById('kEnter'); if (!en) return;
@@ -531,7 +533,8 @@ class Component extends DCLogic {
     // handed over as a Blob; on a gzip host (GitHub Pages) content-length is
     // the compressed size, so the file's own raw size is the denominator
     const K = this.constructor;
-    let worldUrl = K.WORLD || new URL('./isola/island_world.glb?v=' + K.WORLD_TAG, location.href).href;
+    const phone = K.WORLD_BYTES_PHONE > 0 && matchMedia('(hover: none) and (pointer: coarse)').matches;   // (the viewer decides the same way; a mismatch restarts from its URL)
+    let worldUrl = K.WORLD || new URL(phone ? './isola/island_world_phone.glb?v=' + K.WORLD_TAG_PHONE : './isola/island_world.glb?v=' + K.WORLD_TAG, location.href).href;
     let abort = new AbortController();
     const fetchWorld = async (url, rawBytes, signal) => {
       try {   // V248: the copy this page parked last time, under this exact URL (a new world has a new URL)
@@ -554,7 +557,7 @@ class Component extends DCLogic {
       return blob;
     };
     const startWorld = (url, bytes) => fetchWorld(url, bytes, abort.signal).catch((e) => { if (e.name !== 'AbortError') console.warn('door: the viewer will download the world itself', e); return null; });
-    let worldP = startWorld(worldUrl, K.WORLD_BYTES);
+    let worldP = startWorld(worldUrl, phone ? K.WORLD_BYTES_PHONE : K.WORLD_BYTES);
     this.abortWorld = () => abort.abort();
     const d = document.createElement('div'); d.id = 'kDoor';
     d.innerHTML = '<iframe id="kWorld" title="Isola Quieta" allow="fullscreen"></iframe>';
