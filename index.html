@@ -861,7 +861,13 @@ class Component extends DCLogic {
       const out = document.querySelector('[data-out="' + k + '"]');
       if (out) out.textContent = (k === 'travel' || k === 'roll') ? String(v) : v.toFixed(2);
     };
+    // L (the old rig) and D (the frame readout) are dev switches: only with ?dev, never with a
+    // modifier held (cmd-L is the address bar) and never while typing in a field
+    const devKeys = new URLSearchParams(location.search).has('dev');
     this.onKey = (ev) => {
+      if (!devKeys || ev.metaKey || ev.ctrlKey || ev.altKey || ev.shiftKey || ev.repeat) return;
+      const t = ev.target;
+      if (t && t.closest && t.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])')) return;
       const k = (ev.key || '').toLowerCase();
       if (k === 'l') this.toggleLegacy();
       if (k === 'd') this.toggleStats();
