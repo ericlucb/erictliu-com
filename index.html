@@ -505,9 +505,22 @@ class Component extends DCLogic {
   // phone's core on a touch device), while the viewer (an iframe, created now) fetches its
   // own files; the ring counts the world's bytes so it is honest. The viewer
   // says hello with the URL it will ask for, the page parks the bytes in the
-  // Cache API under that URL and hands them over as a Blob with 'go'. When
-  // the viewer reports ready the little door swings open and the world fades
-  // in over the page; the portrait's loop pauses. Back closes it.
+  // Cache API under that URL and hands them over as a Blob with 'go'.
+  // THE OPENING: the viewer shows the painting while the world loads. Its
+  // page is small, so it says 'painting' within a moment of the click (the
+  // painting decoded and on screen); then the little door swings open and the
+  // viewer fades in over the page - the painting, with the ring going on
+  // inside it (this page forwards its count: 'progress'). When the door's
+  // fade is done it tells the viewer 'open'; once the world is ready and the
+  // door is open the painting breathes into the live world there. The ack
+  // carries 'opening: true' so the viewer knows to wait for 'open'; a viewer
+  // that never says 'painting' (an older copy, a painting that failed) opens
+  // the old way, on 'ready'. Back closes it; the portrait's loop pauses.
+  // THE SOUND: the viewer's soundscape plays from an AudioContext this page
+  // makes in the ENTER click itself (window.__isolaAudio, same origin) -
+  // Safari and iOS start audio only from a gesture in the page that plays it,
+  // and the click is here, not in the viewer's frame; the iframe also carries
+  // allow="autoplay" for the browsers that delegate. Closed with the door.
   // WORLD_TAG / WORLD_BYTES: the world's content tag and raw size, stamped by
   // isola-quieta's `npm run site` (scripts/site.mjs) - that is what lets the
   // download start before the viewer has loaded. A stamp behind the viewer's
@@ -531,6 +544,15 @@ class Component extends DCLogic {
       clearTimeout(this.noGlT); this.noGlT = setTimeout(() => { w.textContent = 'ENTER'; p.textContent = ''; }, 4000);
       return;
     }
+    try {   // the sound's gesture (see THE SOUND above): made and unlocked now, in the click; the viewer takes it
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (AC && !window.__isolaAudio) {
+        if (navigator.audioSession) navigator.audioSession.type = 'ambient';   // iOS: mixes with the visitor's own audio, keeps the silent switch
+        const ac = new AC({ latencyHint: 'playback' }), b = ac.createBufferSource();
+        b.buffer = ac.createBuffer(1, 1, 22050); b.connect(ac.destination); b.start(0); ac.resume();
+        window.__isolaAudio = ac;
+      }
+    } catch (e) { /* the viewer starts its sound at the first touch instead */ }
     const ink = (this.theme && this.theme.ink) || '#141414', bg = (this.theme && this.theme.bg) || '#fbfbfa';
     const C = 2 * Math.PI * 29;
     en.classList.add('kLoading'); en.setAttribute('aria-busy', 'true'); en.style.color = ink; en.style.setProperty('--kbg', bg);
@@ -546,7 +568,8 @@ class Component extends DCLogic {
     // switched tabs to wait; the page's own title returns when the world shows, on a failure, or at Back
     const title0 = document.title; let titled = true;
     this.doorUntitle = () => { if (titled) { titled = false; document.title = title0; } };
-    const paint = (f) => { shown = f; ring.style.strokeDashoffset = (C * (1 - Math.max(0, Math.min(1, f)))).toFixed(2); pct.textContent = Math.round(f * 100) + '%'; if (titled) document.title = pct.textContent + ' \u00b7 ' + title0; };
+    let tell = null;   // set once the viewer shows the painting: the count goes on inside it
+    const paint = (f) => { shown = f; ring.style.strokeDashoffset = (C * (1 - Math.max(0, Math.min(1, f)))).toFixed(2); pct.textContent = Math.round(f * 100) + '%'; if (titled) document.title = pct.textContent + ' \u00b7 ' + title0; if (tell) tell({ isola: 'progress', f }); };
     const setBar = (f) => { target = Math.max(target, f); paint(target); };
     const creepTo = (ceiling) => { target = Math.max(target, shown); const cap = ceiling; if (creep) clearInterval(creep);
       creep = setInterval(() => { if (shown >= cap - 0.0005) { clearInterval(creep); creep = null; return; } paint(shown + (cap - shown) * 0.08); }, 120); };
@@ -611,33 +634,36 @@ class Component extends DCLogic {
     let worldP = startWorld(worldUrl, phone ? K.WORLD_BYTES_PHONE : K.WORLD_BYTES);
     this.abortWorld = () => { abort.abort(); if (creep) { clearInterval(creep); creep = null; } };   // (and the ring's creep: it would go on counting into the closed door's live region)
     const d = document.createElement('div'); d.id = 'kDoor';
-    d.innerHTML = '<iframe id="kWorld" title="Isola Quieta" allow="fullscreen"></iframe>';
+    d.innerHTML = '<iframe id="kWorld" title="Isola Quieta" allow="autoplay; fullscreen"></iframe>';
     document.body.appendChild(d);
     this.door = d;
     const frame = d.querySelector('#kWorld');
-    let opened = false, heard = false;
-    // the arrival, in three beats: the ring reaches 100 and holds for a moment, the
-    // little door turns open on its hinge (1.35 s, eased both ends), and as the turn
-    // ends the world fades in over the page (1.6 s); the portrait keeps moving under
-    // the fade and rests once it is done. About three and a half seconds from the last
-    // byte to the island.
-    const open = () => {
+    let opened = false, heard = false, isOpen = false, isReady = false;
+    const post = (m) => { try { frame.contentWindow.postMessage(m, location.origin); } catch (e) {} };
+    // the arrival. On the viewer's 'painting' (early): the little door turns open on its hinge
+    // at once (1.35 s, eased both ends) and halfway through the turn the viewer fades in over
+    // the page (1.6 s) - the painting, the ring going on inside it; the world arrives there
+    // later. On 'ready' (a viewer with no painting): the ring reaches 100 and holds for a
+    // moment, the door turns, and as the turn ends the world fades in. Either way, when the
+    // fade is done the viewer is told 'open' and the portrait rests behind it.
+    const open = (early) => {
       if (opened || failed) return; opened = true;
-      if (creep) { clearInterval(creep); creep = null; }
-      target = 1; paint(1);   // (the meadow's stages arrive after ready; nothing moves the ring back)
+      if (early) tell = post;
+      else { if (creep) { clearInterval(creep); creep = null; } target = 1; paint(1); }   // (the meadow's stages arrive after ready; nothing moves the ring back)
       let faded = false;
       const fadeIn = () => {
         if (faded) return; faded = true;
-        this.doorUntitle();
+        if (!early) this.doorUntitle();   // (early, the count stays in the tab's title until the world is ready)
         d.classList.add('open');
         if (this.dance) this.toggleDance();
-        setTimeout(() => { cancelAnimationFrame(this.raf); try { frame.contentWindow.focus(); } catch (e) {} }, 1700);   // the portrait rests behind the open door
+        setTimeout(() => { isOpen = true; post({ isola: 'open' }); cancelAnimationFrame(this.raf); try { frame.contentWindow.focus(); } catch (e) {} }, 1700);   // the portrait rests behind the open door
       };
       setTimeout(() => {
         en.classList.add('kOpen');
-        leaf.addEventListener('transitionend', () => setTimeout(fadeIn, 60), { once: true });   // the turn's end starts the fade
-        setTimeout(fadeIn, 1500);                                                                  // (or a timer, if the turn never reports)
-      }, 650);
+        if (early) setTimeout(fadeIn, 700);   // the painting comes in as the door turns
+        else leaf.addEventListener('transitionend', () => setTimeout(fadeIn, 60), { once: true });   // the turn's end starts the fade
+        setTimeout(fadeIn, 1500);                                                                    // (or a timer, if the turn never reports)
+      }, early ? 0 : 650);
     };
     // latched: the viewer can report more than one error (two in a row on a cut download), and
     // each used to schedule its own closeDoor() - two history.back() calls, the second one
@@ -658,7 +684,7 @@ class Component extends DCLogic {
       if (failed) return;   // (the door is on its way out)
       if (m.type === 'hello') {
         heard = true;
-        frame.contentWindow.postMessage({ isola: 'ack' }, location.origin);   // 'wait for me': the viewer holds its own download
+        frame.contentWindow.postMessage({ isola: 'ack', opening: true }, location.origin);   // 'wait for me': the viewer holds its own download; 'opening': it will be told 'open'
         if (m.glb === stampedUrl && K.MEADOW_TAG) pruneCache();
         if (m.glb !== worldUrl) {   // this page's stamp is behind the viewer's world: its URL wins, from the start
           console.warn('door: the viewer asks for ' + m.glb + ', not ' + worldUrl + ' (npm run site stamps this page)');
@@ -670,14 +696,25 @@ class Component extends DCLogic {
         frame.contentWindow.postMessage(world ? { isola: 'go', world } : { isola: 'go' }, location.origin);
         worldP = null;   // handed over: the viewer owns the bytes now (a second hello - the viewer reloading itself - finds them in the Cache API)
         if (world) { world = null; setBar(0.80); creepTo(0.88); }   // decoding starts; the viewer's stages take it from here
-      } else if (opened) { if (m.type === 'error') console.warn('door: the viewer reports:', m.message || 'an error', '(its own panel handles it)'); }   // the ring is done; later stages (the meadow's) leave it at 100. An error once the world is shown (a lost WebGL context) is the viewer's to restore or reload - closing the door on it would throw the visitor out of the world
+      } else if (m.type === 'painting') {   // the painting is on screen in the viewer: open now (a reloaded viewer, behind a door already open, is told at once)
+        if (!opened) open(true); else if (isOpen) post({ isola: 'open' });
+      } else if (opened) {
+        if (m.type === 'ready' && !isReady) { isReady = true; if (creep) { clearInterval(creep); creep = null; } target = 1; paint(1); this.doorUntitle(); }
+        else if (m.type === 'progress') { if (m.total) setBar(0.02 + 0.78 * m.loaded / m.total); }
+        else if (m.type === 'stage' && !isReady) {
+          const ceil = { decoding: 0.88, expanding: 0.95, warming: 0.99 }[m.stage];
+          if (m.stage === 'expanding' && typeof m.frac === 'number') { if (creep) { clearInterval(creep); creep = null; } setBar(0.88 + 0.07 * Math.min(1, m.frac)); }
+          else if (ceil) { setBar(Math.min(ceil - 0.06, Math.max(shown, 0.80))); creepTo(ceil); }
+        }
+        else if (m.type === 'error') { if (!isReady) this.doorUntitle(); console.warn('door: the viewer reports:', m.message || 'an error', '(its own panel handles it)'); }
+      }   // the ring is done; later stages (the meadow's) leave it at 100. An error once the world is shown (a lost WebGL context) is the viewer's to restore or reload - closing the door on it would throw the visitor out of the world
       else if (m.type === 'progress') { if (m.total) setBar(0.02 + 0.78 * m.loaded / m.total); }
       else if (m.type === 'stage') {
         const ceil = { decoding: 0.88, expanding: 0.95, warming: 0.99 }[m.stage];
         if (m.stage === 'expanding' && typeof m.frac === 'number') { if (creep) { clearInterval(creep); creep = null; } setBar(0.88 + 0.07 * Math.min(1, m.frac)); }   // real progress from the viewer
         else if (ceil) { setBar(Math.min(ceil - 0.06, Math.max(shown, 0.80))); creepTo(ceil); }
       }
-      else if (m.type === 'ready') open();
+      else if (m.type === 'ready') { isReady = true; open(false); }
       else if (m.type === 'error') fail(m.message || 'the island could not load');
     };
     addEventListener('message', this.onDoorMsg);
@@ -716,6 +753,7 @@ class Component extends DCLogic {
     this.onDoorMsg = this.onDoorPop = null;   // (their closure holds the download's promise, and with it the bytes)
     if (this.abortWorld) { this.abortWorld(); this.abortWorld = null; }   // a download still running stops with the door
     this.door.remove(); this.door = null;
+    if (window.__isolaAudio) { try { window.__isolaAudio.close(); } catch (e) {} window.__isolaAudio = null; }   // the viewer's sound stops with it
     const en = document.getElementById('kEnter');
     if (en) { en.classList.remove('kLoading', 'kOpen'); en.removeAttribute('aria-busy'); en.style.color = ''; en.querySelector('.kWord').textContent = 'ENTER'; en.querySelector('.kPct').textContent = ''; }
     this._t = performance.now() - 16.7;
