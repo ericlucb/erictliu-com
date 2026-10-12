@@ -560,14 +560,15 @@ class Component extends DCLogic {
     const stampedUrl = worldUrl;
     // the viewer names its meadow the same way (isola/src/world-file.js): beside the core, under its own tag
     const meadowUrl = K.WORLD ? K.WORLD.replace(/island_world\.glb/, 'island_meadow.glb') : new URL('./isola/island_meadow.glb?v=' + K.MEADOW_TAG, location.href).href;
-    // one meadow in the cache, as one core: the viewer parks each version's meadow (25 MB) under its own URL and never
-    // removes the last one. Run only once the hello has confirmed this page's stamps (a page behind the viewer would
-    // take the viewer's current meadow for an old one).
-    const pruneMeadow = async () => {
+    // one core and one meadow in the cache, the current ones: the viewer parks each version's meadow (25 MB) under
+    // its own URL and never removes the old ones, and a download served from the cache never reaches the core's own
+    // eviction below. Run only once the hello has confirmed this page's stamps (a page behind the viewer would take
+    // the viewer's current files for old ones).
+    const pruneCache = async () => {
       try {
         if (!window.caches) return;
         const c = await caches.open('isola-world');
-        for (const k of await c.keys()) if (/island_meadow/.test(k.url) && k.url !== meadowUrl) await c.delete(k);
+        for (const k of await c.keys()) if ((/island_meadow/.test(k.url) && k.url !== meadowUrl) || (/island_world/.test(k.url) && k.url !== stampedUrl)) await c.delete(k);
       } catch (e) { console.warn('door: could not prune the cache', e); }
     };
     let abort = new AbortController();
@@ -600,7 +601,7 @@ class Component extends DCLogic {
       try {   // for the next visit; a phone's quota or private mode may refuse, and the hand-off does not depend on it
         const c = await caches.open('isola-world');
         await c.put(url, new Response(blob, { headers: { 'Content-Type': 'model/gltf-binary', 'Content-Length': String(blob.size) } }));
-        for (const k of await c.keys()) if (k.url !== url && /island_world/.test(k.url)) await c.delete(k);   // one core in the cache, not one per version (the viewer parks the meadow beside it; pruneMeadow keeps that to one too)
+        for (const k of await c.keys()) if (k.url !== url && /island_world/.test(k.url)) await c.delete(k);   // one core in the cache, not one per version (the viewer parks the meadow beside it; pruneCache keeps that to one too)
       } catch (e) { console.warn('door: could not cache the world', e); }
       return blob;
     };
@@ -656,7 +657,7 @@ class Component extends DCLogic {
       if (m.type === 'hello') {
         heard = true;
         frame.contentWindow.postMessage({ isola: 'ack' }, location.origin);   // 'wait for me': the viewer holds its own download
-        if (m.glb === stampedUrl && K.MEADOW_TAG) pruneMeadow();
+        if (m.glb === stampedUrl && K.MEADOW_TAG) pruneCache();
         if (m.glb !== worldUrl) {   // this page's stamp is behind the viewer's world: its URL wins, from the start
           console.warn('door: the viewer asks for ' + m.glb + ', not ' + worldUrl + ' (npm run site stamps this page)');
           abort.abort(); abort = new AbortController(); worldUrl = m.glb; paint(0.02);
