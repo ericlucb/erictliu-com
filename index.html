@@ -571,7 +571,7 @@ class Component extends DCLogic {
     // the fade and rests once it is done. About three and a half seconds from the last
     // byte to the island.
     const open = () => {
-      if (opened) return; opened = true;
+      if (opened || failed) return; opened = true;
       if (creep) { clearInterval(creep); creep = null; }
       target = 1; paint(1);   // (the meadow's stages arrive after ready; nothing moves the ring back)
       let faded = false;
@@ -602,6 +602,7 @@ class Component extends DCLogic {
     this.onDoorMsg = async (ev) => {
       if (ev.origin !== location.origin || !ev.data || ev.data.isola !== 'v1' || ev.source !== frame.contentWindow) return;
       const m = ev.data;
+      if (failed) return;   // (the door is on its way out)
       if (m.type === 'hello') {
         heard = true;
         frame.contentWindow.postMessage({ isola: 'ack' }, location.origin);   // 'wait for me': the viewer holds its own download
@@ -613,7 +614,7 @@ class Component extends DCLogic {
         const world = await worldP;
         frame.contentWindow.postMessage(world ? { isola: 'go', world } : { isola: 'go' }, location.origin);
         if (world) { setBar(0.80); creepTo(0.88); }   // decoding starts; the viewer's stages take it from here
-      } else if (opened) { if (m.type === 'error') fail(m.message || 'the island could not load'); }   // the ring is done; later stages (the meadow's) leave it at 100
+      } else if (opened) { if (m.type === 'error') console.warn('door: the viewer reports:', m.message || 'an error', '(its own panel handles it)'); }   // the ring is done; later stages (the meadow's) leave it at 100. An error once the world is shown (a lost WebGL context) is the viewer's to restore or reload - closing the door on it would throw the visitor out of the world
       else if (m.type === 'progress') { if (m.total) setBar(0.02 + 0.78 * m.loaded / m.total); }
       else if (m.type === 'stage') {
         const ceil = { decoding: 0.88, expanding: 0.95, warming: 0.99 }[m.stage];
