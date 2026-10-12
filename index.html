@@ -314,7 +314,7 @@
   </div>
 
   <nav id="kNav" style="position:fixed; right:min(3.4vw, 46px); top:50%; transform:translateY(-50%); z-index:2; display:grid; gap:15px; justify-items:end; font:clamp(13px, min(1.2vw, 2.2vh), 24px)/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing:.19em; color:#a6a7ac;">
-    <a id="kEnter" href="#" aria-label="Enter Isola Quieta" style="color:#a6a7ac; transition:color .16s;" style-hover="color:#141414;">
+    <a id="kEnter" href="./isola/" aria-label="Enter Isola Quieta" style="color:#a6a7ac; transition:color .16s;" style-hover="color:#141414;">
       <span class="kDoorIcon" aria-hidden="true">
         <svg viewBox="0 0 64 64"><circle class="kRing" cx="32" cy="32" r="29"></circle><circle class="kRingFill" cx="32" cy="32" r="29" stroke-dasharray="182.21" stroke-dashoffset="167.63"></circle><rect x="20" y="14" width="24" height="36" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"></rect></svg>
         <span class="kGlow"></span><span class="kLeaf"></span>
@@ -948,7 +948,10 @@ class Component extends DCLogic {
       });
     };
     this.onClick = (ev) => {
-      if (ev.target && ev.target.closest && ev.target.closest('#kEnter')) { ev.preventDefault(); this.openDoor(); return; }
+      if (ev.target && ev.target.closest && ev.target.closest('#kEnter')) {   // a plain click opens the door; cmd / ctrl / shift-click (and the middle button) follow the link to the viewer on its own
+        if (ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey || ev.button !== 0) return;
+        ev.preventDefault(); this.openDoor(); return;
+      }
       const t = ev.target && ev.target.closest ? ev.target.closest('button') : null;
       const inPanel = ev.target && ev.target.closest ? ev.target.closest('#kPanel') : null;
       const body = document.getElementById('kPanelB');
