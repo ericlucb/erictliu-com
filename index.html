@@ -533,8 +533,6 @@ class Component extends DCLogic {
   static WORLD_BYTES = 42981988;
   static WORLD_TAG_PHONE = 'ffc521db';   // the phone's core (KTX2 textures), chosen at the click on a touch device
   static WORLD_BYTES_PHONE = 40742740;
-  static WORLD_TAG_DESKTOP = '00000000';   // the desktop's core (full-size KTX2 textures where they hold up), chosen at the click on a fine pointer
-  static WORLD_BYTES_DESKTOP = 0;
   static MEADOW_TAG = '204c1122';   // the meadow's tag: the viewer fetches it after the door opens and parks it in the door's cache; the door only uses this to evict older meadows
   openDoor() {
     if (this.door) return;
@@ -580,8 +578,8 @@ class Component extends DCLogic {
     // handed over as a Blob; on a gzip host (GitHub Pages) content-length is
     // the compressed size, so the file's own raw size is the denominator
     const K = this.constructor;
-    const touch = matchMedia('(hover: none) and (pointer: coarse)').matches, phone = K.WORLD_BYTES_PHONE > 0 && touch, desk = !touch && K.WORLD_BYTES_DESKTOP > 0;   // (the viewer decides the same way; a mismatch restarts from its URL)
-    let worldUrl = K.WORLD || new URL(phone ? './isola/island_world_phone.glb?v=' + K.WORLD_TAG_PHONE : desk ? './isola/island_world_desktop.glb?v=' + K.WORLD_TAG_DESKTOP : './isola/island_world.glb?v=' + K.WORLD_TAG, location.href).href;
+    const phone = K.WORLD_BYTES_PHONE > 0 && matchMedia('(hover: none) and (pointer: coarse)').matches;   // (the viewer decides the same way; a mismatch restarts from its URL)
+    let worldUrl = K.WORLD || new URL(phone ? './isola/island_world_phone.glb?v=' + K.WORLD_TAG_PHONE : './isola/island_world.glb?v=' + K.WORLD_TAG, location.href).href;
     const stampedUrl = worldUrl;
     // the viewer names its meadow the same way (isola/src/world-file.js): beside the core, under its own tag - the
     // packed pair (island_meadow_packed.glb, and island_meadow_rest.bin for a full meadow), one tag for both
@@ -633,7 +631,7 @@ class Component extends DCLogic {
       return blob;
     };
     const startWorld = (url, bytes) => fetchWorld(url, bytes, abort.signal).catch((e) => { if (e.name !== 'AbortError') console.warn('door: the viewer will download the world itself', e); return null; });
-    let worldP = startWorld(worldUrl, phone ? K.WORLD_BYTES_PHONE : desk ? K.WORLD_BYTES_DESKTOP : K.WORLD_BYTES);
+    let worldP = startWorld(worldUrl, phone ? K.WORLD_BYTES_PHONE : K.WORLD_BYTES);
     this.abortWorld = () => { abort.abort(); if (creep) { clearInterval(creep); creep = null; } };   // (and the ring's creep: it would go on counting into the closed door's live region)
     const d = document.createElement('div'); d.id = 'kDoor';
     d.innerHTML = '<iframe id="kWorld" title="Isola Quieta" allow="autoplay; fullscreen"></iframe>';
