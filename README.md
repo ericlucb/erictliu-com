@@ -96,30 +96,24 @@ verbatim copy of the `web/` folder of
 To update it after the viewer changes, run `npm run site` in isola-quieta: it
 builds the viewer, rsyncs `web/` here (README and .DS_Store excluded) and
 stamps the world's tag and raw size into this page's door (`static WORLD_TAG`
-/ `WORLD_BYTES` in the `Component` class), then commit `isola/` and
-`index.html` together.
+/ `WORLD_BYTES`, and the phone's `WORLD_TAG_PHONE` / `WORLD_BYTES_PHONE`, in
+the `Component` class), then commit `isola/` and `index.html` together.
+`static MEADOW_TAG` beside them is the meadow's tag, which the door uses
+only to evict older meadows from the cache; `npm run site` does not stamp
+it yet, so update it when the meadow changes.
 
 Nothing else needs bumping — the viewer cache-busts its own files with its
-`BUILD` constant, and the world by its own content hash. The world is two
+`BUILD` constant, and the world by its own content hash. The world is three
 files: `isola/island_world.glb`, the core (~43 MB raw; the door downloads
-it with the ring), and `isola/island_meadow.glb`, the grass (~25 MB raw;
-the viewer fetches it once the door is open and the blades grow in over a
-second). Pages gzips both; GitHub warns above 50 MB but Pages serves files
-up to 100 MB.
+it with the ring), `isola/island_world_phone.glb`, the same core with
+halved KTX2 textures (~41 MB raw; what the door downloads on a touch
+device), and `isola/island_meadow.glb`, the grass (~25 MB raw; the viewer
+fetches it once the door is open and the blades grow in over a second).
+Pages gzips all three; GitHub warns above 50 MB but Pages serves files up
+to 100 MB. The files stay in this repo (moving them to Cloudflare R2 was
+considered and rejected).
 
-**Hosting the world off the repo.** Every world update adds ~58 MB to this
-repo's history. To move the file to Cloudflare R2: create a bucket, upload
-`isola/island_world.glb`, give the bucket a public domain (`*.r2.dev` or a
-subdomain of erictliu.com), add a CORS rule allowing `GET` from
-`https://erictliu.com` with `Content-Length` exposed (the ring reads the body
-and needs the size), then set `static WORLD = 'https://…/island_world.glb'`
-in `index.html` (the `Component` class, just above `openDoor()`) and delete
-`isola/island_world.glb`. The door passes the URL to the viewer as
-`?world=`; the viewer accepts only `*.r2.dev`, `*.r2.cloudflarestorage.com`
-and `erictliu.com` hosts. Cache-busting is then by file name (put the
-viewer's build tag in the object key).
-
-The icon row under the portrait (dance, draw, shuffle, reset, and the gear
+The icon row under the portrait (dance, draw, shuffle, and the gear
 for the sliders and swatches) shows a word under the icon you hover; on a
 phone the glyphs stand alone, the face fills the width, and DRAW's bar runs
 along the bottom (draw.js no longer picks the left side in portrait; the
@@ -147,4 +141,14 @@ entry, so the browser's Back (or the phone's back gesture) closes it,
 aborts a download still running, and restores ENTER; there is no LEAVE
 button and Esc is left to the world (it pauses the mouse look). If the page
 never acks, the viewer loads the world itself after
-2.5 s, so `isola/` also works on its own.
+2.5 s, so `isola/` also works on its own — ENTER links there, so a cmd- or
+middle-click opens the viewer in a tab of its own.
+
+What can go wrong at the door: a browser without WebGL 2 is told at the
+click (`COULD NOT OPEN`, the reason in the link's title) and nothing
+downloads; an `error` from the viewer before `ready`, or 20 s with neither
+a hello nor a byte of the world, shows `COULD NOT OPEN` and closes the door
+once, by one Back; an `error` after the world is shown (a lost WebGL
+context) is left to the viewer's own panel. While the door loads, the tab's
+title carries the count. The door keeps one core and one meadow in the
+cache, the current ones.

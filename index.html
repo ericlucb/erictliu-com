@@ -64,7 +64,7 @@
     #kPanel .sw { position:relative; }
     #kPanel .sw::after { content:''; position:absolute; inset:-7px; border-radius:50%; }
   }
-  /* The icon row under the face: dance, draw, shuffle, reset, settings. Glyphs only; the
+  /* The icon row under the face: dance, draw, shuffle, settings. Glyphs only; the
      word appears under the one you hover (or focus). Where nothing hovers, the words stay
      on, small. The gear opens the settings body below. */
   #kIcons { display:flex; justify-content:center; gap:clamp(2px, 0.6vw, 10px); }
@@ -501,8 +501,8 @@ class Component extends DCLogic {
   // ENTER: the door to Isola Quieta (the world in ./isola/, a copy of
   // github.com/ericlucb/isola-quieta's web/). Nothing is fetched until the
   // click. Then the link turns into a small door with a ring around it and
-  // the page starts downloading the world file that instant (69 MB raw, 54
-  // MB on the wire), while the viewer (an iframe, created now) fetches its
+  // the page starts downloading the world file that instant (~43 MB raw; the
+  // phone's core on a touch device), while the viewer (an iframe, created now) fetches its
   // own files; the ring counts the world's bytes so it is honest. The viewer
   // says hello with the URL it will ask for, the page parks the bytes in the
   // Cache API under that URL and hands them over as a Blob with 'go'. When
@@ -512,12 +512,9 @@ class Component extends DCLogic {
   // isola-quieta's `npm run site` (scripts/site.mjs) - that is what lets the
   // download start before the viewer has loaded. A stamp behind the viewer's
   // world only costs a restart of the download from the viewer's URL.
-  // WORLD: leave empty and the world file is ./isola/island_world.glb. To
-  // serve it from Cloudflare R2 instead, upload isola/island_world.glb to a
-  // bucket with a public domain and a CORS rule allowing GET from
-  // https://erictliu.com (the ring needs a readable body and Content-Length),
-  // then put its https URL here - the viewer only accepts *.r2.dev,
-  // *.r2.cloudflarestorage.com and erictliu.com hosts.
+  // WORLD: empty - the world files are served from ./isola/ (hosting them
+  // elsewhere, R2, was rejected). A URL here would be passed to the viewer
+  // as ?world=, which accepts only its allow-listed hosts.
   static WORLD = '';
   static WORLD_TAG = '291ea798';
   static WORLD_BYTES = 42981988;
