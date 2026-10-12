@@ -184,6 +184,7 @@
   #kEnter .kWord, #kEnter .kPct { grid-area:2 / 1; transition:opacity .35s ease; white-space:nowrap; }
   #kEnter .kPct { font:clamp(10px, min(0.9vw, 1.7vh), 13px)/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing:.12em; font-variant-numeric:tabular-nums; opacity:0; align-self:center; }
   #kEnter.kLoading .kWord { opacity:0; }
+  #kEnter:not(.kLoading) .kPct { width:1px; overflow:hidden; }   /* resting, the count is only a voice (the reason the door could not open): no width to push the door aside */
   #kEnter.kLoading .kPct { opacity:.75; }
   #kEnter.kOpen .kPct { opacity:0; transition-delay:.3s; }
   #kDoor { position:fixed; inset:0; z-index:40; background:#5d5f7e; opacity:0; transition:opacity 1.6s cubic-bezier(.4,0,.2,1); }
@@ -464,6 +465,18 @@ const PAIRS = [
   ['#3b2415', '#f2efe8'], ['#3b2415', '#e8e6e1'], ['#123326', '#e8e6e1'], ['#123326', '#eef1f4']
 ];
 
+// the world is drawn with WebGL 2 (three r164 has no WebGL 1 path): asked of a throwaway
+// canvas at the click, before the download starts, so a browser without it is told at once
+// instead of after tens of megabytes
+function hasWebGL2() {
+  try {
+    const g = document.createElement('canvas').getContext('webgl2');
+    if (!g) return false;
+    const x = g.getExtension('WEBGL_lose_context'); if (x) x.loseContext();   // (hand the context back now, not at GC)
+    return true;
+  } catch (e) { return false; }
+}
+
 class Component extends DCLogic {
   componentDidMount() { this.dead = false; this.booted = false; this.boot(); }
 
@@ -513,6 +526,13 @@ class Component extends DCLogic {
   openDoor() {
     if (this.door) return;
     const en = document.getElementById('kEnter'); if (!en) return;
+    if (!hasWebGL2()) {   // no download, no door: the word says so, the reason is the link's title and is read out
+      const why = 'your browser can\u2019t show 3D', w = en.querySelector('.kWord'), p = en.querySelector('.kPct');
+      console.warn('door: no WebGL 2 -', why);
+      w.textContent = 'COULD NOT OPEN'; en.title = why; p.textContent = why;
+      clearTimeout(this.noGlT); this.noGlT = setTimeout(() => { w.textContent = 'ENTER'; p.textContent = ''; }, 4000);
+      return;
+    }
     const ink = (this.theme && this.theme.ink) || '#141414', bg = (this.theme && this.theme.bg) || '#fbfbfa';
     const C = 2 * Math.PI * 29;
     en.classList.add('kLoading'); en.setAttribute('aria-busy', 'true'); en.style.color = ink; en.style.setProperty('--kbg', bg);
