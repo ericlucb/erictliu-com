@@ -558,9 +558,11 @@ class Component extends DCLogic {
     const phone = K.WORLD_BYTES_PHONE > 0 && matchMedia('(hover: none) and (pointer: coarse)').matches;   // (the viewer decides the same way; a mismatch restarts from its URL)
     let worldUrl = K.WORLD || new URL(phone ? './isola/island_world_phone.glb?v=' + K.WORLD_TAG_PHONE : './isola/island_world.glb?v=' + K.WORLD_TAG, location.href).href;
     const stampedUrl = worldUrl;
-    // the viewer names its meadow the same way (isola/src/world-file.js): beside the core, under its own tag
-    const meadowUrl = K.WORLD ? K.WORLD.replace(/island_world\.glb/, 'island_meadow.glb') : new URL('./isola/island_meadow.glb?v=' + K.MEADOW_TAG, location.href).href;
-    // one core and one meadow in the cache, the current ones: the viewer parks each version's meadow (25 MB) under
+    // the viewer names its meadow the same way (isola/src/world-file.js): beside the core, under its own tag - the
+    // packed pair (island_meadow_packed.glb, and island_meadow_rest.bin for a full meadow), one tag for both
+    const meadowAt = (name) => K.WORLD ? K.WORLD.replace(/island_world\.glb(\?.*)?$/, name) : new URL('./isola/' + name + '?v=' + K.MEADOW_TAG, location.href).href;
+    const meadowUrls = [meadowAt('island_meadow_packed.glb'), meadowAt('island_meadow_rest.bin')];
+    // one core and one meadow in the cache, the current ones: the viewer parks each version's meadow (7-11 MB) under
     // its own URL and never removes the old ones, and a download served from the cache never reaches the core's own
     // eviction below. Run only once the hello has confirmed this page's stamps (a page behind the viewer would take
     // the viewer's current files for old ones).
@@ -568,7 +570,7 @@ class Component extends DCLogic {
       try {
         if (!window.caches) return;
         const c = await caches.open('isola-world');
-        for (const k of await c.keys()) if ((/island_meadow/.test(k.url) && k.url !== meadowUrl) || (/island_world/.test(k.url) && k.url !== stampedUrl)) await c.delete(k);
+        for (const k of await c.keys()) if ((/island_meadow/.test(k.url) && !meadowUrls.includes(k.url)) || (/island_world/.test(k.url) && k.url !== stampedUrl)) await c.delete(k);
       } catch (e) { console.warn('door: could not prune the cache', e); }
     };
     let abort = new AbortController();
