@@ -587,12 +587,17 @@ class Component extends DCLogic {
         setTimeout(fadeIn, 1500);                                                                  // (or a timer, if the turn never reports)
       }, 650);
     };
+    // latched: the viewer can report more than one error (two in a row on a cut download), and
+    // each used to schedule its own closeDoor() - two history.back() calls, the second one
+    // leaving the site
+    let failed = false;
     const fail = (msg) => {
+      if (failed) return; failed = true;
       console.warn('door:', msg);
       if (creep) { clearInterval(creep); creep = null; }
       en.classList.remove('kLoading', 'kOpen'); en.removeAttribute('aria-busy'); en.style.color = '';
       en.querySelector('.kWord').textContent = 'COULD NOT OPEN';
-      setTimeout(() => this.closeDoor(), 2500);   // (pops the history entry, which closes)
+      setTimeout(() => { if (this.door === d) this.closeDoor(); }, 2500);   // (pops the history entry, which closes; not a door opened since)
     };
     this.onDoorMsg = async (ev) => {
       if (ev.origin !== location.origin || !ev.data || ev.data.isola !== 'v1' || ev.source !== frame.contentWindow) return;
@@ -622,7 +627,7 @@ class Component extends DCLogic {
     // the browser's Back is the way out (no LEAVE button, no Esc - Esc is
     // the world's own key, it pauses the mouse look): the open door is a history entry
     history.pushState({ isola: 'door' }, '', location.href);
-    this.onDoorPop = () => this.closeDoor(true);
+    this.onDoorPop = (e) => { if (e.state && e.state.isola === 'door') return; this.closeDoor(true); };   // (a popstate that lands on the door's own entry is not a way out)
     addEventListener('popstate', this.onDoorPop);
     const pass = ['stats', 'dev', 'tier', 'dpr'].filter(k => new URLSearchParams(location.search).has(k)).map(k => '&' + k + '=' + encodeURIComponent(new URLSearchParams(location.search).get(k) || '1')).join('');
     frame.src = './isola/?embed=1' + pass + (this.constructor.WORLD ? '&world=' + encodeURIComponent(this.constructor.WORLD) : '');   // (?stats=1 on this page shows the viewer's numbers on screen)
@@ -631,7 +636,19 @@ class Component extends DCLogic {
 
   closeDoor(fromHistory) {
     if (!this.door) return;
-    if (!fromHistory && history.state && history.state.isola === 'door') { history.back(); return; }   // -> popstate -> here
+    if (!fromHistory) {
+      // history.back() is asynchronous: until its popstate lands, the door and its history entry
+      // are both still here, so a second call must not go back again (that one leaves the site)
+      if (this.doorClosing) return;
+      if (history.state && history.state.isola === 'door') {
+        this.doorClosing = true;
+        const d = this.door;
+        history.back();   // -> popstate -> here
+        setTimeout(() => { if (this.door === d) this.closeDoor(true); }, 1000);   // (a popstate that never comes)
+        return;
+      }
+    }
+    this.doorClosing = false;
     removeEventListener('message', this.onDoorMsg); removeEventListener('popstate', this.onDoorPop);
     if (this.abortWorld) { this.abortWorld(); this.abortWorld = null; }   // a download still running stops with the door
     this.door.remove(); this.door = null;
