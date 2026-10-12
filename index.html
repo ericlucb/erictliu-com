@@ -556,17 +556,22 @@ class Component extends DCLogic {
     const phone = K.WORLD_BYTES_PHONE > 0 && matchMedia('(hover: none) and (pointer: coarse)').matches;   // (the viewer decides the same way; a mismatch restarts from its URL)
     let worldUrl = K.WORLD || new URL(phone ? './isola/island_world_phone.glb?v=' + K.WORLD_TAG_PHONE : './isola/island_world.glb?v=' + K.WORLD_TAG, location.href).href;
     let abort = new AbortController();
+    // the watchdog's clock: any sign of life - a chunk of the world, or the viewer's hello - restarts it
+    let lastSign = performance.now();
+    const alive = () => { lastSign = performance.now(); };
     const fetchWorld = async (url, rawBytes, signal) => {
       try {   // V248: the copy this page parked last time, under this exact URL (a new world has a new URL)
         const hit = window.caches && await caches.match(url);
         if (hit) { const blob = await hit.blob(); if (blob.size > 1024) { setBar(0.80); return blob; } }
       } catch (e) { console.warn('door: cache lookup failed', e); }
-      const res = await fetch(url, { signal });
+      // low priority: on a slow link the world's bytes would otherwise crowd out the viewer's
+      // own script, and the viewer's hello is what the watchdog waits for (ignored where unsupported)
+      const res = await fetch(url, { signal, priority: 'low' });
       if (!res.ok || !res.body) throw new Error('world fetch ' + res.status);
       const encoded = !!res.headers.get('content-encoding');
       const total = (encoded && rawBytes) ? rawBytes : (+res.headers.get('content-length') || rawBytes || 0);
       const reader = res.body.getReader(), chunks = []; let got = 0;
-      for (;;) { const { done, value } = await reader.read(); if (done) break; chunks.push(value); got += value.length; if (total) setBar(0.02 + 0.78 * got / total); }
+      for (;;) { const { done, value } = await reader.read(); if (done) break; chunks.push(value); got += value.length; alive(); if (total) setBar(0.02 + 0.78 * got / total); }
       const blob = new Blob(chunks, { type: 'model/gltf-binary' });
       chunks.length = 0;
       try {   // for the next visit; a phone's quota or private mode may refuse, and the hand-off does not depend on it
@@ -652,7 +657,12 @@ class Component extends DCLogic {
     addEventListener('popstate', this.onDoorPop);
     const pass = ['stats', 'dev', 'tier', 'dpr'].filter(k => new URLSearchParams(location.search).has(k)).map(k => '&' + k + '=' + encodeURIComponent(new URLSearchParams(location.search).get(k) || '1')).join('');
     frame.src = './isola/?embed=1' + pass + (this.constructor.WORLD ? '&world=' + encodeURIComponent(this.constructor.WORLD) : '');   // (?stats=1 on this page shows the viewer's numbers on screen)
-    setTimeout(() => { if (!heard && !opened && this.door === d) fail('no answer from the island'); }, 20000);
+    // 'no answer' only after 20 s with neither a hello nor a byte of the world: a slow link that
+    // is still downloading is not a dead viewer
+    const watch = setInterval(() => {
+      if (heard || opened || failed || this.door !== d) { clearInterval(watch); return; }
+      if (performance.now() - lastSign > 20000) { clearInterval(watch); fail('no answer from the island'); }
+    }, 1000);
   }
 
   closeDoor(fromHistory) {
