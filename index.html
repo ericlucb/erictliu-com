@@ -606,7 +606,7 @@ class Component extends DCLogic {
     };
     const startWorld = (url, bytes) => fetchWorld(url, bytes, abort.signal).catch((e) => { if (e.name !== 'AbortError') console.warn('door: the viewer will download the world itself', e); return null; });
     let worldP = startWorld(worldUrl, phone ? K.WORLD_BYTES_PHONE : K.WORLD_BYTES);
-    this.abortWorld = () => abort.abort();
+    this.abortWorld = () => { abort.abort(); if (creep) { clearInterval(creep); creep = null; } };   // (and the ring's creep: it would go on counting into the closed door's live region)
     const d = document.createElement('div'); d.id = 'kDoor';
     d.innerHTML = '<iframe id="kWorld" title="Isola Quieta" allow="fullscreen"></iframe>';
     document.body.appendChild(d);
