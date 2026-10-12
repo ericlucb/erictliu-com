@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -68,14 +68,14 @@
      word appears under the one you hover (or focus). Where nothing hovers, the words stay
      on, small. The gear opens the settings body below. */
   #kIcons { display:flex; justify-content:center; gap:clamp(2px, 0.6vw, 10px); }
-  #kIcons .ic { appearance:none; background:transparent; border:0; padding:8px 7px 20px; margin:0; position:relative; color:#9a9b9f;
+  #kIcons .ic { appearance:none; background:transparent; border:0; padding:8px 7px 20px; margin:0; position:relative; color:#828488;
     cursor:pointer; display:grid; place-items:center; transition:color .18s; -webkit-tap-highlight-color:transparent; }
   #kIcons .ic svg { width:clamp(18px, min(1.5vw, 2.6vh), 24px); height:clamp(18px, min(1.5vw, 2.6vh), 24px); display:block; transition:transform .35s ease; }
   #kIcons .ic span { position:absolute; top:calc(100% - 16px); left:50%; transform:translateX(-50%); white-space:nowrap; pointer-events:none;
     font:clamp(8px, min(0.7vw, 1.3vh), 10px)/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing:.15em; opacity:0; transition:opacity .18s; }
   #kIcons .ic:hover, #kIcons .ic:focus-visible, #kIcons .ic[data-on="1"], #kIcons .ic[aria-expanded="true"], body:has(#kDrawHost) #kDraw { color:#141414; }   /* (DRAW is lit while its overlay is up) */
   #kIcons .ic:hover span, #kIcons .ic:focus-visible span, body:has(#kDrawHost) #kDraw span { opacity:1; }
-  #kIcons .ic:focus-visible { outline:none; }
+  #kIcons .ic:focus-visible { outline:2px solid currentColor; outline-offset:-2px; border-radius:7px; }   /* the keyboard's place in the row (inside the button, so it never touches a neighbour) */
   #kIcons #kPanelT:hover svg, #kIcons #kPanelT[aria-expanded="true"] svg { transform:rotate(60deg); }
   @media (hover: none) {   /* a phone: glyphs only, a little larger; a toggle shows its state by colour */
     #kIcons { gap:6px; }
@@ -313,8 +313,8 @@
     </div>
   </div>
 
-  <nav id="kNav" style="position:fixed; right:min(3.4vw, 46px); top:50%; transform:translateY(-50%); z-index:2; display:grid; gap:15px; justify-items:end; font:clamp(13px, min(1.2vw, 2.2vh), 24px)/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing:.19em; color:#a6a7ac;">
-    <a id="kEnter" href="./isola/" aria-label="Enter Isola Quieta" style="color:#a6a7ac; transition:color .16s;" style-hover="color:#141414;">
+  <nav id="kNav" style="position:fixed; right:min(3.4vw, 46px); top:50%; transform:translateY(-50%); z-index:2; display:grid; gap:15px; justify-items:end; font:clamp(13px, min(1.2vw, 2.2vh), 24px)/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing:.19em; color:#66676e;">
+    <a id="kEnter" href="./isola/" aria-label="Enter Isola Quieta" style="color:#66676e; transition:color .16s;" style-hover="color:#141414;">
       <span class="kDoorIcon" aria-hidden="true">
         <svg viewBox="0 0 64 64"><circle class="kRing" cx="32" cy="32" r="29"></circle><circle class="kRingFill" cx="32" cy="32" r="29" stroke-dasharray="182.21" stroke-dashoffset="167.63"></circle><rect x="20" y="14" width="24" height="36" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"></rect></svg>
         <span class="kGlow"></span><span class="kLeaf"></span>
@@ -545,7 +545,11 @@ class Component extends DCLogic {
     // ring creeps toward on a timer, so it keeps moving while work that
     // has no byte count runs; 'ready' is 100.
     let shown = 0, target = 0.02, creep = null;
-    const paint = (f) => { shown = f; ring.style.strokeDashoffset = (C * (1 - Math.max(0, Math.min(1, f)))).toFixed(2); pct.textContent = Math.round(f * 100) + '%'; };
+    // the count rides in the tab's title too while the door loads ('42% · eric liu'), for a visitor who
+    // switched tabs to wait; the page's own title returns when the world shows, on a failure, or at Back
+    const title0 = document.title; let titled = true;
+    this.doorUntitle = () => { if (titled) { titled = false; document.title = title0; } };
+    const paint = (f) => { shown = f; ring.style.strokeDashoffset = (C * (1 - Math.max(0, Math.min(1, f)))).toFixed(2); pct.textContent = Math.round(f * 100) + '%'; if (titled) document.title = pct.textContent + ' \u00b7 ' + title0; };
     const setBar = (f) => { target = Math.max(target, f); paint(target); };
     const creepTo = (ceiling) => { target = Math.max(target, shown); const cap = ceiling; if (creep) clearInterval(creep);
       creep = setInterval(() => { if (shown >= cap - 0.0005) { clearInterval(creep); creep = null; return; } paint(shown + (cap - shown) * 0.08); }, 120); };
@@ -624,6 +628,7 @@ class Component extends DCLogic {
       let faded = false;
       const fadeIn = () => {
         if (faded) return; faded = true;
+        this.doorUntitle();
         d.classList.add('open');
         if (this.dance) this.toggleDance();
         setTimeout(() => { cancelAnimationFrame(this.raf); try { frame.contentWindow.focus(); } catch (e) {} }, 1700);   // the portrait rests behind the open door
@@ -640,6 +645,7 @@ class Component extends DCLogic {
     let failed = false;
     const fail = (msg) => {
       if (failed) return; failed = true;
+      this.doorUntitle();
       console.warn('door:', msg);
       if (creep) { clearInterval(creep); creep = null; }
       en.classList.remove('kLoading', 'kOpen'); en.removeAttribute('aria-busy'); en.style.color = '';
@@ -705,6 +711,7 @@ class Component extends DCLogic {
       }
     }
     this.doorClosing = false;
+    if (this.doorUntitle) { this.doorUntitle(); this.doorUntitle = null; }
     removeEventListener('message', this.onDoorMsg); removeEventListener('popstate', this.onDoorPop);
     this.onDoorMsg = this.onDoorPop = null;   // (their closure holds the download's promise, and with it the bytes)
     if (this.abortWorld) { this.abortWorld(); this.abortWorld = null; }   // a download still running stops with the door
