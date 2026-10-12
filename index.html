@@ -570,10 +570,18 @@ class Component extends DCLogic {
       if (!res.ok || !res.body) throw new Error('world fetch ' + res.status);
       const encoded = !!res.headers.get('content-encoding');
       const total = (encoded && rawBytes) ? rawBytes : (+res.headers.get('content-length') || rawBytes || 0);
-      const reader = res.body.getReader(), chunks = []; let got = 0;
-      for (;;) { const { done, value } = await reader.read(); if (done) break; chunks.push(value); got += value.length; alive(); if (total) setBar(0.02 + 0.78 * got / total); }
-      const blob = new Blob(chunks, { type: 'model/gltf-binary' });
-      chunks.length = 0;
+      // the chunks fold into Blob parts every 8 MB as they arrive, so the file is never held twice
+      // over (a chunk list and a Blob copied from it); a Blob of Blobs copies nothing
+      const reader = res.body.getReader(), parts = []; let chunks = [], held = 0, got = 0;
+      for (;;) {
+        const { done, value } = await reader.read(); if (done) break;
+        chunks.push(value); held += value.length; got += value.length; alive(); if (total) setBar(0.02 + 0.78 * got / total);
+        if (held >= 8 << 20) { parts.push(new Blob(chunks)); chunks = []; held = 0; }
+      }
+      if (chunks.length) parts.push(new Blob(chunks));
+      chunks = null;
+      const blob = new Blob(parts, { type: 'model/gltf-binary' });
+      parts.length = 0;
       try {   // for the next visit; a phone's quota or private mode may refuse, and the hand-off does not depend on it
         const c = await caches.open('isola-world');
         await c.put(url, new Response(blob, { headers: { 'Content-Type': 'model/gltf-binary', 'Content-Length': String(blob.size) } }));
@@ -636,9 +644,11 @@ class Component extends DCLogic {
           abort.abort(); abort = new AbortController(); worldUrl = m.glb; paint(0.02);
           worldP = startWorld(worldUrl, m.bytes || 0);
         }
-        const world = await worldP;
+        let world = await worldP;
+        if (this.door !== d || failed) return;   // (closed while the bytes were still coming)
         frame.contentWindow.postMessage(world ? { isola: 'go', world } : { isola: 'go' }, location.origin);
-        if (world) { setBar(0.80); creepTo(0.88); }   // decoding starts; the viewer's stages take it from here
+        worldP = null;   // handed over: the viewer owns the bytes now (a second hello - the viewer reloading itself - finds them in the Cache API)
+        if (world) { world = null; setBar(0.80); creepTo(0.88); }   // decoding starts; the viewer's stages take it from here
       } else if (opened) { if (m.type === 'error') console.warn('door: the viewer reports:', m.message || 'an error', '(its own panel handles it)'); }   // the ring is done; later stages (the meadow's) leave it at 100. An error once the world is shown (a lost WebGL context) is the viewer's to restore or reload - closing the door on it would throw the visitor out of the world
       else if (m.type === 'progress') { if (m.total) setBar(0.02 + 0.78 * m.loaded / m.total); }
       else if (m.type === 'stage') {
@@ -681,6 +691,7 @@ class Component extends DCLogic {
     }
     this.doorClosing = false;
     removeEventListener('message', this.onDoorMsg); removeEventListener('popstate', this.onDoorPop);
+    this.onDoorMsg = this.onDoorPop = null;   // (their closure holds the download's promise, and with it the bytes)
     if (this.abortWorld) { this.abortWorld(); this.abortWorld = null; }   // a download still running stops with the door
     this.door.remove(); this.door = null;
     const en = document.getElementById('kEnter');
