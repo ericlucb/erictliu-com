@@ -1,0 +1,35 @@
+{
+  "source": "sky_panorama.jpg",
+  "rowsTopDown": {
+    "bankTop": 594,
+    "plumTop": 670,
+    "shelfTop": 707,
+    "seaTop": 744
+  },
+  "rates": {
+    "shelf": 0.0,
+    "plum": 0.3,
+    "bank": 0.6,
+    "towers": 1.0
+  },
+  "rateStops": [
+    [
+      0.30957,
+      0.0
+    ],
+    [
+      0.3457,
+      0.3
+    ],
+    [
+      0.39551,
+      0.6
+    ],
+    [
+      0.44434,
+      1.0
+    ]
+  ],
+  "billowPeak": 3.0567,
+  "billowLayout": "RG = field 1, BA = field 2, (c / 255) * 2 - 1, times billowPeak = pano texels per unit amplitude (RMS 1)"
+}

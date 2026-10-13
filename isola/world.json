@@ -10,6 +10,7 @@
   },
   "materials": {
     "housePaintRetint": "WEB_HM_home_paint_8",
+    "houseRearDoor": "WEB_HM_home_paint_9",
     "houseRoofEdgeTrim": "WEB_HM_home_paint_39",
     "houseSillFlowers": "WEB_HM_home_garden_37",
     "boat": "WEB_HM_shore_paint_0",
@@ -36,5 +37,9 @@
     "leaf": "IllustratedLeaf",
     "oil": "_Oil",
     "petal": "petal"
+  },
+  "optional": {
+    "about": "roles a world file may lack, the viewer handling both: the shipped crown's leaf cards leave the core with blender/scripts/remove_old_crown.py (V288; the grown tree's atlas is then web/tree-leaf-atlas.*)",
+    "substrings": ["leaf"]
   }
 }

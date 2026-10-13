@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <title>Isola Quieta — live world</title>
-<link rel="modulepreload" href="./dist/main.js?v=v286">
+<link rel="modulepreload" href="./dist/main.js?v=v288">
 <style>
   html, body { margin: 0; height: 100%; overflow: hidden; background: #5d5f7e; }
   #app { position: fixed; inset: 0; }
@@ -119,8 +119,54 @@
   #loading {
     position: fixed; inset: 0; display: flex; align-items: center;
     justify-content: center; color: #efe9dc; background: #5d5f7e;
-    font: 14px ui-monospace, Menlo, monospace; transition: opacity .6s;
+    font: 14px ui-monospace, Menlo, monospace; transition: opacity .6s; z-index: 41;
   }
+  #loading .ring { display: none; }
+  /* THE OPENING (web/src/opening.js): while the world loads the painting itself fills the window, framed as the
+     hero camera frames the scene at this aspect (the script below places it); when the world is ready it breathes
+     into the live render. Over it the load is a small ring at the foot, in the HUD's type. */
+  #opening { position: fixed; inset: 0; z-index: 40; overflow: hidden; touch-action: none; }
+  #opening .sharp img { opacity: 0; }
+  #opening.shown .sharp img { opacity: 1; transition: opacity .5s ease; }   /* the sky's gradient is there at once, the painting a moment later */
+  body.embed #opening.shown .sharp img { transition: none; }   /* (the door's own fade shows it) */
+  #opening.fading { pointer-events: none; transition: none; }
+  #opening .sharp, #opening .soft { position: absolute; inset: 0; width: 100%; height: 100%; }
+  #opening img { position: absolute; max-width: none; user-select: none; -webkit-user-drag: none; pointer-events: none; }
+  #opening .mir { position: absolute; top: 0; height: 100%; overflow: hidden; display: none; }
+  #opening .mir img { transform: scaleX(-1); }
+  #opening .mir.r { -webkit-mask-image: linear-gradient(to right, #000 35%, transparent); mask-image: linear-gradient(to right, #000 35%, transparent); }
+  #opening .mir.l { -webkit-mask-image: linear-gradient(to left, #000 35%, transparent); mask-image: linear-gradient(to left, #000 35%, transparent); }
+  body.opening #loading { inset: auto 0 calc(22px + env(safe-area-inset-bottom, 0px)) 0; background: none; gap: 8px; pointer-events: none;
+    color: #f4efe3; font: 11px/1 -apple-system, "SF Pro Text", sans-serif; letter-spacing: .08em; text-shadow: 0 1px 4px rgba(20,20,40,.4); opacity: .82; }
+  body.opening #loading .ring { display: block; width: 20px; height: 20px; overflow: visible; filter: drop-shadow(0 1px 3px rgba(20,20,40,.35)); }
+  body.opening #loading .txt { display: none; }
+  #loading .ring circle { fill: none; stroke: currentColor; stroke-width: 1.6; }
+  #loading .ring .track { opacity: .3; }
+  #loading .ring .fill { stroke-dasharray: 69.12; stroke-dashoffset: 67.7; stroke-linecap: round; transform: rotate(-90deg); transform-origin: 50% 50%; transition: stroke-dashoffset .25s linear; }
+  #loading .pct { font-variant-numeric: tabular-nums; min-width: 3.2em; }
+  body:not(.opening) #loading .pct { display: none; }
+  #loading.failed { inset: 0; background: rgba(40,42,62,.55); font: 14px ui-monospace, Menlo, monospace; opacity: 1; pointer-events: auto; }
+  /* the sound (web/src/audio.js): a small toggle in the HUD's style, remembered; bottom-right on a desktop,
+     top-right on a phone (the stick and the look hint own the foot there) */
+  #sound { position: fixed; right: calc(16px + env(safe-area-inset-right, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 20;
+    width: 30px; height: 30px; padding: 0; display: grid; place-items: center; color: #f4efe3; cursor: pointer;
+    border: 1px solid rgba(244,239,227,.42); border-radius: 50%; background: rgba(35,43,51,.19); box-shadow: 0 1px 0 rgba(244,239,227,.14);
+    opacity: .6; transition: opacity .6s ease; -webkit-tap-highlight-color: transparent; }
+  #sound:hover, #sound:focus-visible { opacity: .9; }
+  #sound:focus-visible { outline: 1px solid rgba(244,239,227,.8); outline-offset: 2px; }
+  #sound svg { width: 16px; height: 16px; overflow: visible; filter: drop-shadow(0 1px 2px rgba(20,20,40,.35)); }
+  #sound .wave { transition: opacity .3s; }
+  #sound .slash { opacity: 0; transition: opacity .3s; }
+  #sound.off .wave { opacity: 0; }
+  #sound.off .slash { opacity: 1; }
+  body.touch #sound { bottom: auto; top: calc(14px + env(safe-area-inset-top, 0px)); right: calc(14px + env(safe-area-inset-right, 0px)); }
+  /* THE BENCH (web/src/seat.js): seated, the hints step back; the stick and the toggle stay where a thumb finds them */
+  body.seated #hud { opacity: 0 !important; }
+  body.opening #hud { opacity: 0 !important; }   /* the hints come in after the painting has breathed into the world */
+  body.seated #stick { opacity: .3; }
+  body.seated #sound { opacity: .28; }
+  body.seated #turn { display: none !important; }
+  body.over-bench #app canvas { cursor: pointer; }
 </style>
 <script type="importmap">
 { "imports": { "three": "./vendor/three.module.js" } }
@@ -141,15 +187,76 @@
 <div id="fps"></div>
 <div id="stick" aria-label="Move stick"><div class="base"></div><div class="knob"></div><div class="lbl">move</div></div>
 <!-- the LOOK panel (?dev=1) is built by src/dev-panel.js; its styles are .hud-panel above -->
-<div id="loading">pouring the watercolours…</div>
+<button id="sound" type="button" aria-pressed="true" aria-label="Sound on. Turn sound off" title="Sound on"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2.5 6h2.2L8 3.2v9.6L4.7 10H2.5z" fill="rgba(244,239,227,.18)"/><path class="wave" d="M10.4 5.6a3.2 3.2 0 0 1 0 4.8M12.3 3.9a5.6 5.6 0 0 1 0 8.2"/><path class="slash" d="M10.6 6l3.6 4m0-4-3.6 4"/></svg></button>
+<!-- THE OPENING: the painting, placed by the script below before anything else runs (web/src/opening.js takes it from there) -->
+<div id="opening" aria-hidden="true"><div class="sharp"><img alt="" src="./opening.webp?v=v288" decoding="async" fetchpriority="high"><div class="mir r"><img alt="" src="./opening.webp?v=v288"></div><div class="mir l"><img alt="" src="./opening.webp?v=v288"></div></div></div>
+<div id="loading" role="progressbar" aria-label="Loading the island" aria-valuemin="0" aria-valuemax="100"><svg class="ring" viewBox="0 0 24 24" aria-hidden="true"><circle class="track" cx="12" cy="12" r="11"/><circle class="fill" cx="12" cy="12" r="11"/></svg><span class="pct"></span><span class="txt">pouring the watercolours…</span></div>
+<script>
+// THE OPENING'S FIRST PAINT. The painting (opening.webp: reference/hero.webp with the water run on below it,
+// scripts/make_opening.mjs) is the hero frame at 2.4:1, so at any window it lands where the hero camera puts the
+// scene: scaled by the lens's focal length over the painting's (3840 px), its optical axis on the camera's. The
+// arithmetic is framing.js's (heroFov, heroShiftX, HORIZON_SHIFT: paintingPlacement), repeated here so the
+// painting is placed before the program arrives; tests/opening.test.mjs holds the two equal at every aspect.
+// Above the painting the sky runs on as the live sky's own gradient (read off the hero render by height); a
+// window wider than the painting's coverage (a square-ish iPad, an ultra-wide) takes a mirrored copy at the side.
+window.ISOLA_OPENING = (() => {
+  const root = document.getElementById('opening'), q = new URLSearchParams(location.search);
+  if (q.get('opening') === '0') { root.remove(); return null; }
+  document.body.classList.add('opening');
+  const embed = q.has('embed') && window.parent !== window;
+  if (embed) document.body.classList.add('embed');
+  const IMG = { w: 3840, h: 2448 };   // painting px the file covers (scripts/make_opening.mjs)
+  const SKY = [[-1400, '32,95,152'], [-400, '34,98,155'], [-200, '43,108,162'], [0, '55,126,165']];   // painting y -> the live sky above the painting
+  function place(w, h) {
+    const a = w / h, s = h * Math.min(Math.max(a, 1), 2.4) / 3840;   // the hero lens: tan(fov/2) = 0.5 / clamp(a, 1, 2.4), focal = h / 2 / tan
+    const t = Math.min(Math.max((a - 2.4) / (5120 / 1440 - 2.4), 0), 1), narrow = Math.min(Math.max((a - 1) / 0.6, 0), 1);
+    const shift = (-0.135 + t * (-0.2068 + 0.135)) * narrow;          // heroShiftX
+    return { s, x: w * (0.5 - shift) - 3840 * (0.5 + 0.135) * s, y: h * (0.5 + 0.122) - 1600 * (0.5 + 0.122) * s };
+  }
+  const sharp = root.querySelector('.sharp'), img = sharp.querySelector('img'), mr = root.querySelector('.mir.r'), ml = root.querySelector('.mir.l');
+  function layout() {
+    const w = innerWidth, h = innerHeight, p = place(w, h), W = IMG.w * p.s, H = IMG.h * p.s, px = (v) => v.toFixed(1) + 'px';
+    const box = (el, x) => { el.style.left = px(x); el.style.top = px(p.y); el.style.width = px(W); el.style.height = px(H); };
+    box(img, p.x);
+    sharp.style.background = 'linear-gradient(to bottom, ' + SKY.map(([y, c]) => `rgb(${c}) ${px(p.y + y * p.s)}`).join(', ') + `, rgb(86,104,113) ${px(p.y + H)})`;
+    const F = 1100 * p.s, right = p.x + W;   // a mirrored copy fades out over 1100 painting px
+    mr.style.display = right < w ? 'block' : 'none'; mr.style.left = px(right); mr.style.width = px(F); box(mr.firstChild, 0);
+    ml.style.display = p.x > 0 ? 'block' : 'none'; ml.style.left = px(p.x - F); ml.style.width = px(F); box(ml.firstChild, F - W);
+  }
+  layout();
+  addEventListener('resize', layout);
+  // shown once decoded and on screen; behind the door that is the door's cue to open ('painting')
+  const shown = new Promise((res) => {
+    let told = false;   // (a frame's paint, or 150 ms if the busy loading thread holds the frames back: the door's fade takes longer than that)
+    const tell = () => { if (told) return; told = true; res(performance.now()); if (embed) window.parent.postMessage({ isola: 'v1', type: 'painting' }, location.origin); };
+    const go = () => { root.classList.add('shown'); requestAnimationFrame(() => requestAnimationFrame(tell)); setTimeout(tell, 150); };
+    const failed = () => { root.remove(); document.body.classList.remove('opening'); res(0); };   // no painting: the plain panel
+    (img.decode ? img.decode() : Promise.reject(new Error('no decode'))).then(go, () => {
+      if (img.complete && img.naturalWidth) go();
+      else if (img.complete) failed();
+      else { img.addEventListener('load', go, { once: true }); img.addEventListener('error', failed, { once: true }); }
+    });
+  });
+  return { root, layout, place, shown, IMG, SKY };
+})();
+</script>
 <script type="module">
 // the program is dist/main.js (one bundle: scripts/build.mjs); ?src=1 loads the unbundled
 // sources for development; the build tag is the cache key (tests/build-tag.test.mjs keeps this
 // line and main.js's BUILD in step); ?cb=<x> busts it while developing
 const q = new URLSearchParams(location.search);
 // the height grids leave with the program, not after it (a <link preload> did this in Chrome; WebKit fetched them twice)
-window.GRIDS_FETCH = fetch('./world-grids.bin?v=v286');
-import((q.has('src') ? './src/main.js' : './dist/main.js') + '?v=v286' + (q.get('cb') ? '&cb=' + encodeURIComponent(q.get('cb')) : ''));
+window.GRIDS_FETCH = fetch('./world-grids.bin?v=v288');
+import((q.has('src') ? './src/main.js' : './dist/main.js') + '?v=v288' + (q.get('cb') ? '&cb=' + encodeURIComponent(q.get('cb')) : ''))
+  .catch((err) => {   // the program did not arrive, or stopped before its first frame: the panel and the door's error, once
+    console.error(err);
+    const el = document.getElementById('loading');
+    if (!el || el.querySelector('button')) return;   // (the program's own failPanel already said it)
+    el.style.opacity = 1; el.classList.add('failed'); el.textContent = 'The island could not load. ';
+    const b = document.createElement('button'); b.textContent = 'Try again'; b.style.font = 'inherit'; b.style.marginLeft = '8px';
+    b.addEventListener('click', () => location.reload()); el.appendChild(b);
+    if (q.has('embed') && window.parent !== window) window.parent.postMessage({ isola: 'v1', type: 'error', message: 'The island could not load.' }, location.origin);
+  });
 </script>
 </body>
 </html>
