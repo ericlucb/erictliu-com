@@ -516,11 +516,6 @@ class Component extends DCLogic {
   // carries 'opening: true' so the viewer knows to wait for 'open'; a viewer
   // that never says 'painting' (an older copy, a painting that failed) opens
   // the old way, on 'ready'. Back closes it; the portrait's loop pauses.
-  // THE SOUND: the viewer's soundscape plays from an AudioContext this page
-  // makes in the ENTER click itself (window.__isolaAudio, same origin) -
-  // Safari and iOS start audio only from a gesture in the page that plays it,
-  // and the click is here, not in the viewer's frame; the iframe also carries
-  // allow="autoplay" for the browsers that delegate. Closed with the door.
   // WORLD_TAG / WORLD_BYTES: the world's content tag and raw size, stamped by
   // isola-quieta's `npm run site` (scripts/site.mjs) - that is what lets the
   // download start before the viewer has loaded. A stamp behind the viewer's
@@ -544,15 +539,6 @@ class Component extends DCLogic {
       clearTimeout(this.noGlT); this.noGlT = setTimeout(() => { w.textContent = 'ENTER'; p.textContent = ''; }, 4000);
       return;
     }
-    try {   // the sound's gesture (see THE SOUND above): made and unlocked now, in the click; the viewer takes it
-      const AC = window.AudioContext || window.webkitAudioContext;
-      if (AC && !window.__isolaAudio) {
-        if (navigator.audioSession) navigator.audioSession.type = 'ambient';   // iOS: mixes with the visitor's own audio, keeps the silent switch
-        const ac = new AC({ latencyHint: 'playback' }), b = ac.createBufferSource();
-        b.buffer = ac.createBuffer(1, 1, 22050); b.connect(ac.destination); b.start(0); ac.resume();
-        window.__isolaAudio = ac;
-      }
-    } catch (e) { /* the viewer starts its sound at the first touch instead */ }
     const ink = (this.theme && this.theme.ink) || '#141414', bg = (this.theme && this.theme.bg) || '#fbfbfa';
     const C = 2 * Math.PI * 29;
     en.classList.add('kLoading'); en.setAttribute('aria-busy', 'true'); en.style.color = ink; en.style.setProperty('--kbg', bg);
@@ -634,7 +620,7 @@ class Component extends DCLogic {
     let worldP = startWorld(worldUrl, phone ? K.WORLD_BYTES_PHONE : K.WORLD_BYTES);
     this.abortWorld = () => { abort.abort(); if (creep) { clearInterval(creep); creep = null; } };   // (and the ring's creep: it would go on counting into the closed door's live region)
     const d = document.createElement('div'); d.id = 'kDoor';
-    d.innerHTML = '<iframe id="kWorld" title="Isola Quieta" allow="autoplay; fullscreen"></iframe>';
+    d.innerHTML = '<iframe id="kWorld" title="Isola Quieta" allow="fullscreen"></iframe>';
     document.body.appendChild(d);
     this.door = d;
     const frame = d.querySelector('#kWorld');
@@ -753,7 +739,6 @@ class Component extends DCLogic {
     this.onDoorMsg = this.onDoorPop = null;   // (their closure holds the download's promise, and with it the bytes)
     if (this.abortWorld) { this.abortWorld(); this.abortWorld = null; }   // a download still running stops with the door
     this.door.remove(); this.door = null;
-    if (window.__isolaAudio) { try { window.__isolaAudio.close(); } catch (e) {} window.__isolaAudio = null; }   // the viewer's sound stops with it
     const en = document.getElementById('kEnter');
     if (en) { en.classList.remove('kLoading', 'kOpen'); en.removeAttribute('aria-busy'); en.style.color = ''; en.querySelector('.kWord').textContent = 'ENTER'; en.querySelector('.kPct').textContent = ''; }
     this._t = performance.now() - 16.7;
