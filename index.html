@@ -544,21 +544,32 @@ class Component extends DCLogic {
     en.classList.add('kLoading'); en.setAttribute('aria-busy', 'true'); en.style.color = ink; en.style.setProperty('--kbg', bg);
     const ring = en.querySelector('.kRingFill'), pct = en.querySelector('.kPct'), leaf = en.querySelector('.kLeaf');
     // ONE ring, 0 to 100, never spinning (Eric: 'it should just be loading
-    // throughout ... and give a loading percentage'). The download owns
-    // 2-80 % by bytes; the viewer's stages after it (decoding the file,
-    // expanding the meadow, warming the shaders) each get a ceiling the
-    // ring creeps toward on a timer, so it keeps moving while work that
-    // has no byte count runs; 'ready' is 100.
-    let shown = 0, target = 0.02, creep = null;
+    // throughout ... and give a loading percentage'). V315 (Eric: 'it just
+    // jumps to 80% and stalls there... should be more even'): the shares
+    // follow where the time goes - the download 2-50 % by bytes (from the
+    // cache: at once), decoding the file 50-72, the meadow 72-88, warming
+    // the shaders 88-99, 'ready' 100. A step with no byte count eases on its
+    // own clock toward its band's end - half the way in its expected time,
+    // then slower and slower, never stopping - and the ring follows the
+    // count at no more than 40 % a second, so a jump (a cached world) is a
+    // sweep, not a leap.
+    let shown = 0, target = 0.02, creep = null;   // creep: the band a stage eases through, { from, to, t0, tau }
     // the count rides in the tab's title too while the door loads ('42% · eric liu'), for a visitor who
     // switched tabs to wait; the page's own title returns when the world shows, on a failure, or at Back
     const title0 = document.title; let titled = true;
     this.doorUntitle = () => { if (titled) { titled = false; document.title = title0; } };
     let tell = null;   // set once the viewer shows the painting: the count goes on inside it
     const paint = (f) => { shown = f; ring.style.strokeDashoffset = (C * (1 - Math.max(0, Math.min(1, f)))).toFixed(2); pct.textContent = Math.round(f * 100) + '%'; if (titled) document.title = pct.textContent + ' \u00b7 ' + title0; if (tell) tell({ isola: 'progress', f }); };
-    const setBar = (f) => { target = Math.max(target, f); paint(target); };
-    const creepTo = (ceiling) => { target = Math.max(target, shown); const cap = ceiling; if (creep) clearInterval(creep);
-      creep = setInterval(() => { if (shown >= cap - 0.0005) { clearInterval(creep); creep = null; return; } paint(shown + (cap - shown) * 0.08); }, 120); };
+    const setBar = (f) => { target = Math.max(target, f); };
+    const creepTo = (ceiling, tau = 3) => { creep = { from: Math.max(target, shown), to: ceiling, t0: performance.now(), tau: tau * 1000 }; };
+    let lastTick = performance.now();
+    const sweep = setInterval(() => {
+      const now = performance.now(), dt = Math.min(0.25, (now - lastTick) / 1000); lastTick = now;
+      if (shown >= 1) { clearInterval(sweep); return; }
+      let goal = target;
+      if (creep && typeof creep === 'object') { const k = (now - creep.t0) / creep.tau; goal = Math.max(goal, creep.from + (creep.to - creep.from) * (1 - 1 / (1 + k))); }
+      if (goal > shown + 0.0005) paint(Math.min(goal, shown + 0.40 * dt));
+    }, 50);
     paint(0.02);
     // the world file, downloaded from the click so the ring moves at once,
     // handed over as a Blob; on a gzip host (GitHub Pages) content-length is
@@ -589,7 +600,7 @@ class Component extends DCLogic {
     const fetchWorld = async (url, rawBytes, signal) => {
       try {   // V248: the copy this page parked last time, under this exact URL (a new world has a new URL)
         const hit = window.caches && await caches.match(url);
-        if (hit) { const blob = await hit.blob(); if (blob.size > 1024) { setBar(0.80); return blob; } }
+        if (hit) { const blob = await hit.blob(); if (blob.size > 1024) { setBar(0.50); return blob; } }
       } catch (e) { console.warn('door: cache lookup failed', e); }
       // low priority: on a slow link the world's bytes would otherwise crowd out the viewer's
       // own script, and the viewer's hello is what the watchdog waits for (ignored where unsupported)
@@ -602,7 +613,7 @@ class Component extends DCLogic {
       const reader = res.body.getReader(), parts = []; let chunks = [], held = 0, got = 0;
       for (;;) {
         const { done, value } = await reader.read(); if (done) break;
-        chunks.push(value); held += value.length; got += value.length; alive(); if (total) setBar(0.02 + 0.78 * got / total);
+        chunks.push(value); held += value.length; got += value.length; alive(); if (total) setBar(0.02 + 0.48 * got / total);
         if (held >= 8 << 20) { parts.push(new Blob(chunks)); chunks = []; held = 0; }
       }
       if (chunks.length) parts.push(new Blob(chunks));
@@ -618,7 +629,7 @@ class Component extends DCLogic {
     };
     const startWorld = (url, bytes) => fetchWorld(url, bytes, abort.signal).catch((e) => { if (e.name !== 'AbortError') console.warn('door: the viewer will download the world itself', e); return null; });
     let worldP = startWorld(worldUrl, phone ? K.WORLD_BYTES_PHONE : K.WORLD_BYTES);
-    this.abortWorld = () => { abort.abort(); if (creep) { clearInterval(creep); creep = null; } };   // (and the ring's creep: it would go on counting into the closed door's live region)
+    this.abortWorld = () => { abort.abort(); creep = null; clearInterval(sweep); };   // (and the ring's creep: it would go on counting into the closed door's live region)
     const d = document.createElement('div'); d.id = 'kDoor';
     d.innerHTML = '<iframe id="kWorld" title="Isola Quieta" allow="fullscreen"></iframe>';
     document.body.appendChild(d);
@@ -635,7 +646,7 @@ class Component extends DCLogic {
     const open = (early) => {
       if (opened || failed) return; opened = true;
       if (early) tell = post;
-      else { if (creep) { clearInterval(creep); creep = null; } target = 1; paint(1); }   // (the meadow's stages arrive after ready; nothing moves the ring back)
+      else { creep = null; clearInterval(sweep); target = 1; paint(1); }   // (the meadow's stages arrive after ready; nothing moves the ring back)
       let faded = false;
       const fadeIn = () => {
         if (faded) return; faded = true;
@@ -659,7 +670,7 @@ class Component extends DCLogic {
       if (failed) return; failed = true;
       this.doorUntitle();
       console.warn('door:', msg);
-      if (creep) { clearInterval(creep); creep = null; }
+      creep = null; clearInterval(sweep);
       en.classList.remove('kLoading', 'kOpen'); en.removeAttribute('aria-busy'); en.style.color = '';
       en.querySelector('.kWord').textContent = 'COULD NOT OPEN';
       setTimeout(() => { if (this.door === d) this.closeDoor(); }, 2500);   // (pops the history entry, which closes; not a door opened since)
@@ -681,24 +692,24 @@ class Component extends DCLogic {
         if (this.door !== d || failed) return;   // (closed while the bytes were still coming)
         frame.contentWindow.postMessage(world ? { isola: 'go', world } : { isola: 'go' }, location.origin);
         worldP = null;   // handed over: the viewer owns the bytes now (a second hello - the viewer reloading itself - finds them in the Cache API)
-        if (world) { world = null; setBar(0.80); creepTo(0.88); }   // decoding starts; the viewer's stages take it from here
+        if (world) { world = null; setBar(0.50); creepTo(0.72, 3.5); }   // decoding starts; the viewer's stages take it from here
       } else if (m.type === 'painting') {   // the painting is on screen in the viewer: open now (a reloaded viewer, behind a door already open, is told at once)
         if (!opened) open(true); else if (isOpen) post({ isola: 'open' });
       } else if (opened) {
-        if (m.type === 'ready' && !isReady) { isReady = true; if (creep) { clearInterval(creep); creep = null; } target = 1; paint(1); this.doorUntitle(); }
-        else if (m.type === 'progress') { if (m.total) setBar(0.02 + 0.78 * m.loaded / m.total); }
+        if (m.type === 'ready' && !isReady) { isReady = true; creep = null; clearInterval(sweep); target = 1; paint(1); this.doorUntitle(); }
+        else if (m.type === 'progress') { if (m.total) setBar(0.02 + 0.48 * m.loaded / m.total); }
         else if (m.type === 'stage' && !isReady) {
-          const ceil = { decoding: 0.88, expanding: 0.95, warming: 0.99 }[m.stage];
-          if (m.stage === 'expanding' && typeof m.frac === 'number') { if (creep) { clearInterval(creep); creep = null; } setBar(0.88 + 0.07 * Math.min(1, m.frac)); }
-          else if (ceil) { setBar(Math.min(ceil - 0.06, Math.max(shown, 0.80))); creepTo(ceil); }
+          const band = { decoding: [0.50, 0.72, 3.5], expanding: [0.72, 0.88, 3], warming: [0.88, 0.99, 2.5] }[m.stage];
+          if (m.stage === 'expanding' && typeof m.frac === 'number') { creep = null; setBar(0.72 + 0.16 * Math.min(1, m.frac)); }
+          else if (band) { setBar(band[0]); creepTo(band[1], band[2]); }
         }
         else if (m.type === 'error') { if (!isReady) this.doorUntitle(); console.warn('door: the viewer reports:', m.message || 'an error', '(its own panel handles it)'); }
       }   // the ring is done; later stages (the meadow's) leave it at 100. An error once the world is shown (a lost WebGL context) is the viewer's to restore or reload - closing the door on it would throw the visitor out of the world
-      else if (m.type === 'progress') { if (m.total) setBar(0.02 + 0.78 * m.loaded / m.total); }
+      else if (m.type === 'progress') { if (m.total) setBar(0.02 + 0.48 * m.loaded / m.total); }
       else if (m.type === 'stage') {
-        const ceil = { decoding: 0.88, expanding: 0.95, warming: 0.99 }[m.stage];
-        if (m.stage === 'expanding' && typeof m.frac === 'number') { if (creep) { clearInterval(creep); creep = null; } setBar(0.88 + 0.07 * Math.min(1, m.frac)); }   // real progress from the viewer
-        else if (ceil) { setBar(Math.min(ceil - 0.06, Math.max(shown, 0.80))); creepTo(ceil); }
+        const band = { decoding: [0.50, 0.72, 3.5], expanding: [0.72, 0.88, 3], warming: [0.88, 0.99, 2.5] }[m.stage];
+        if (m.stage === 'expanding' && typeof m.frac === 'number') { creep = null; setBar(0.72 + 0.16 * Math.min(1, m.frac)); }   // real progress from the viewer
+        else if (band) { setBar(band[0]); creepTo(band[1], band[2]); }
       }
       else if (m.type === 'ready') { isReady = true; open(false); }
       else if (m.type === 'error') fail(m.message || 'the island could not load');
