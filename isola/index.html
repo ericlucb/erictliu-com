@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <title>Isola Quieta — live world</title>
-<link rel="modulepreload" href="./dist/main.js?v=v319">
+<link rel="modulepreload" href="./dist/main.js?v=v320">
 <style>
   html, body { margin: 0; height: 100%; overflow: hidden; background: #5d5f7e; }
   #app { position: fixed; inset: 0; }
@@ -153,15 +153,15 @@
 <div id="fps"></div>
 <div id="stick" aria-label="Move stick"><div class="base"></div><div class="knob"></div><div class="lbl">move</div></div>
 <!-- the LOOK panel (?dev=1) is built by src/dev-panel.js; its styles are .hud-panel above -->
-<div id="loading" role="progressbar" aria-label="Loading the island" aria-valuemin="0" aria-valuemax="100"><svg class="ring" viewBox="0 0 24 24" aria-hidden="true"><circle class="track" cx="12" cy="12" r="11"/><circle class="fill" cx="12" cy="12" r="11"/></svg><span class="pct"></span><span class="txt">loading the island…</span></div>
+<div id="loading" role="progressbar" aria-label="Loading" aria-valuemin="0" aria-valuemax="100"><svg class="ring" viewBox="0 0 24 24" aria-hidden="true"><circle class="track" cx="12" cy="12" r="11"/><circle class="fill" cx="12" cy="12" r="11"/></svg><span class="pct"></span><span class="txt">loading…</span></div>
 <script type="module">
 // the program is dist/main.js (one bundle: scripts/build.mjs); ?src=1 loads the unbundled
 // sources for development; the build tag is the cache key (tests/build-tag.test.mjs keeps this
 // line and main.js's BUILD in step); ?cb=<x> busts it while developing
 const q = new URLSearchParams(location.search);
 // the height grids leave with the program, not after it (a <link preload> did this in Chrome; WebKit fetched them twice)
-window.GRIDS_FETCH = fetch('./world-grids.bin?v=v319');
-import((q.has('src') ? './src/main.js' : './dist/main.js') + '?v=v319' + (q.get('cb') ? '&cb=' + encodeURIComponent(q.get('cb')) : ''))
+window.GRIDS_FETCH = fetch('./world-grids.bin?v=v320');
+import((q.has('src') ? './src/main.js' : './dist/main.js') + '?v=v320' + (q.get('cb') ? '&cb=' + encodeURIComponent(q.get('cb')) : ''))
   .catch((err) => {   // the program did not arrive, or stopped before its first frame: the panel and the door's error, once
     console.error(err);
     const el = document.getElementById('loading');
