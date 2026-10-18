@@ -555,12 +555,19 @@ class Component extends DCLogic {
     // slower, never stopping - and the ring follows the count at no more
     // than 40 % a second, so a jump (a cached world) is a sweep, not a leap.
     let shown = 0, target = 0.02, creep = null;   // creep: the band a stage eases through, { from, to, t0, tau }
-    // the count rides in the tab's title too while the door loads ('42% · eric liu'), for a visitor who
+    // V319 (Eric: 'instead of loading percentages, say loading and then change the words of what's loading, so
+    // users get a sense of what's happening'): the ring still fills; under it, what is happening, in the island's
+    // own words - each stage's word at its share of the ring (the download 2-45 %, decoding 45-60, the build
+    // 60-76, the warm-up 76-99). The word rides in the tab's title too while the door loads, for a visitor who
     // switched tabs to wait; the page's own title returns when the world shows, on a failure, or at Back
     const title0 = document.title; let titled = true;
     this.doorUntitle = () => { if (titled) { titled = false; document.title = title0; } };
     let tell = null;   // set once the viewer shows the painting: the count goes on inside it
-    const paint = (f) => { shown = f; ring.style.strokeDashoffset = (C * (1 - Math.max(0, Math.min(1, f)))).toFixed(2); pct.textContent = Math.round(f * 100) + '%'; if (titled) document.title = pct.textContent + ' \u00b7 ' + title0; if (tell) tell({ isola: 'progress', f }); };
+    const WORDS = [[0.15, 'loading the island'], [0.30, 'fetching the sea and sky'], [0.45, 'carrying the house across'], [0.60, 'unpacking the house'],
+                   [0.68, 'raising the walls'], [0.76, 'planting the meadow'], [0.90, 'mixing the watercolours'], [1, 'lighting the sky']];
+    const loadWord = (f) => { for (const [lim, w] of WORDS) if (f < lim) return w + '\u2026'; return 'opening the door\u2026'; };
+    let said = '';
+    const paint = (f) => { shown = f; ring.style.strokeDashoffset = (C * (1 - Math.max(0, Math.min(1, f)))).toFixed(2); const w = loadWord(f); if (w !== said) { said = w; pct.textContent = w; if (titled) document.title = w + ' \u00b7 ' + title0; } if (tell) tell({ isola: 'progress', f }); };
     const setBar = (f) => { target = Math.max(target, f); };
     const creepTo = (ceiling, tau = 3) => { creep = { from: Math.max(target, shown), to: ceiling, t0: performance.now(), tau: tau * 1000 }; };
     let lastTick = performance.now();
