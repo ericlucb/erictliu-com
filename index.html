@@ -171,7 +171,7 @@
   #kEnter .kDoorIcon svg { position:absolute; inset:0; width:100%; height:100%; display:block; overflow:visible; }
   #kEnter .kRing, #kEnter .kRingFill { opacity:0; transition:opacity .45s ease; }
   #kEnter .kRing { fill:none; stroke:currentColor; stroke-width:2; }
-  #kEnter .kRingFill { fill:none; stroke:currentColor; stroke-width:2.5; stroke-linecap:round; transform:rotate(-90deg); transform-origin:50% 50%; transition:stroke-dashoffset .25s linear, opacity .45s ease; }
+  #kEnter .kRingFill { fill:none; stroke:currentColor; stroke-width:2.5; stroke-linecap:round; transform:rotate(-90deg); transform-origin:50% 50%; transition:opacity .45s ease; }   /* (V318: no transition on the arc - the script sweeps it; a busy page let the CSS lag the count by a third) */
   #kEnter.kLoading .kRing { opacity:.22; }
   #kEnter.kLoading .kRingFill { opacity:1; }
   #kEnter .kGlow, #kEnter .kLeaf { position:absolute; left:34.375%; top:25%; width:31.25%; height:50%; }
@@ -601,7 +601,7 @@ class Component extends DCLogic {
     const fetchWorld = async (url, rawBytes, signal) => {
       try {   // V248: the copy this page parked last time, under this exact URL (a new world has a new URL)
         const hit = window.caches && await caches.match(url);
-        if (hit) { const blob = await hit.blob(); if (blob.size > 1024) { setBar(0.45); return blob; } }
+        if (hit) { const blob = await hit.blob(); if (blob.size > 1024) { setBar(0.45); creepTo(0.60, 4); return blob; } }
       } catch (e) { console.warn('door: cache lookup failed', e); }
       // low priority: on a slow link the world's bytes would otherwise crowd out the viewer's
       // own script, and the viewer's hello is what the watchdog waits for (ignored where unsupported)
@@ -619,6 +619,7 @@ class Component extends DCLogic {
       }
       if (chunks.length) parts.push(new Blob(chunks));
       chunks = null;
+      setBar(0.45); creepTo(0.60, 4);   // (V318, Eric: 'progressively load, otherwise it looks like it's stuck'): the bytes are in - the ring moves on while the file is parked and the viewer wakes
       const blob = new Blob(parts, { type: 'model/gltf-binary' });
       parts.length = 0;
       try {   // for the next visit; a phone's quota or private mode may refuse, and the hand-off does not depend on it
