@@ -1,0 +1,468 @@
+<title>Isola Quieta Cabin</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --paper:#efe5d5; --card:#f6eee0; --ink:#2f2118; --ink2:#7b5f43; --rule:#cbb896;
+    --ember:#c2551f; --brass:#8a6222; --shadow:rgba(47,33,24,.16);
+    --display:'Fraunces',Georgia,'Times New Roman',serif;
+    --sans:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
+    --mono:'IBM Plex Mono',ui-monospace,'SF Mono',Menlo,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --paper:#15100b; --card:#1f1811; --ink:#e8dcc5; --ink2:#a58a68; --rule:#3d3023;
+      --ember:#e0702f; --brass:#c79a4a; --shadow:rgba(0,0,0,.5);
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#15100b; --card:#1f1811; --ink:#e8dcc5; --ink2:#a58a68; --rule:#3d3023;
+    --ember:#e0702f; --brass:#c79a4a; --shadow:rgba(0,0,0,.5);
+  }
+  html,body{height:100%}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);overflow:hidden}
+  #stage{position:fixed;inset:0;background:#0d0906}
+  canvas{display:block;width:100%;height:100%}
+  /* the viewer's own grade is a Kuwahara plus an ink line; this is only its
+     colour half - saturation, a little sepia, an afternoon warmth - plus grain */
+  #stage.graded canvas{filter:saturate(1.09) sepia(.05) contrast(1.03) brightness(1.02)}
+  #grain{position:fixed;inset:0;pointer-events:none;opacity:.5;mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/></filter><rect width='160' height='160' filter='url(%23n)' opacity='.42'/></svg>");
+    display:none}
+  #stage.graded ~ #grain{display:block}
+  #vig{position:fixed;inset:0;pointer-events:none;
+    background:radial-gradient(ellipse at 50% 46%,transparent 42%,rgba(20,12,6,.42) 100%)}
+
+  .panel{position:fixed;background:var(--card);border:1px solid var(--rule);
+    box-shadow:0 2px 10px var(--shadow);border-radius:3px}
+  #plaque{top:calc(env(safe-area-inset-top,0px) + 12px);left:12px;padding:11px 14px 10px;max-width:min(340px,calc(100vw - 24px))}
+  #plaque h1{margin:0;font-family:var(--display);font-size:20px;font-weight:600;
+    letter-spacing:-.01em;line-height:1.1}
+  #plaque p{margin:5px 0 0;font-size:11.5px;color:var(--ink2);line-height:1.45;max-width:38ch}
+  .figs{display:flex;gap:16px;margin-top:9px;padding-top:8px;border-top:1px solid var(--rule)}
+  .fig b{display:block;font-family:var(--mono);font-size:14px;font-variant-numeric:tabular-nums;
+    font-weight:500;color:var(--ember)}
+  .fig span{display:block;font-size:9.5px;letter-spacing:.055em;text-transform:uppercase;color:var(--ink2);margin-top:2px}
+
+  #rail{top:calc(env(safe-area-inset-top,0px) + 12px);right:12px;width:232px;max-height:calc(100% - 120px);
+    display:flex;flex-direction:column}
+  #rail h2{margin:0;padding:9px 12px 8px;font-size:9.5px;letter-spacing:.07em;text-transform:uppercase;
+    color:var(--ink2);border-bottom:1px solid var(--rule);font-weight:600}
+  #vps{overflow-y:auto;padding:4px}
+  #vps button{display:block;width:100%;text-align:left;background:none;border:0;border-radius:2px;
+    padding:6px 8px;cursor:pointer;color:var(--ink);font-family:var(--sans);font-size:12.5px;line-height:1.25}
+  #vps button:hover,#vps button:focus-visible{background:color-mix(in srgb,var(--ember) 13%,transparent);outline:none}
+  #vps button:focus-visible{box-shadow:inset 0 0 0 1.5px var(--ember)}
+  #vps button em{display:block;font-family:var(--mono);font-style:normal;font-size:10px;
+    font-variant-numeric:tabular-nums;color:var(--ink2);margin-top:2px;line-height:1.35}
+  #vps button.on{background:color-mix(in srgb,var(--ember) 18%,transparent)}
+
+  #readout{bottom:calc(env(safe-area-inset-bottom,0px) + 12px);right:12px;padding:9px 11px;
+    font-family:var(--mono);font-size:11px;font-variant-numeric:tabular-nums;line-height:1.55;min-width:176px}
+  #readout i{font-style:normal;color:var(--ink2)}
+  #readout .surf{color:var(--ember);font-weight:500}
+  #plan{display:block;margin-top:8px;border-top:1px solid var(--rule);padding-top:8px}
+
+  #keys{bottom:calc(env(safe-area-inset-bottom,0px) + 12px);left:12px;padding:8px 11px;
+    font-size:11px;color:var(--ink2);line-height:1.6;max-width:min(300px,calc(100vw - 24px))}
+  #keys kbd{font-family:var(--mono);font-size:10.5px;background:color-mix(in srgb,var(--ink) 9%,transparent);
+    border:1px solid var(--rule);border-radius:2px;padding:0 4px;color:var(--ink)}
+
+  #gate{position:fixed;inset:0;display:grid;place-items:center;background:color-mix(in srgb,var(--paper) 90%,transparent);
+    backdrop-filter:blur(2px);cursor:pointer;z-index:5;padding:20px;text-align:center}
+  #gate div{max-width:34ch}
+  #gate strong{display:block;font-family:var(--display);font-size:24px;font-weight:600;margin-bottom:8px}
+  #gate p{margin:0;font-size:13px;color:var(--ink2);line-height:1.6}
+  #gate p+p{margin-top:10px;font-family:var(--mono);font-size:11px}
+  #err{position:fixed;inset:0;display:none;place-items:center;background:var(--paper);z-index:9;padding:24px;text-align:center}
+  #err div{max-width:46ch;font-size:13px;line-height:1.65}
+  #err strong{display:block;font-family:var(--display);font-size:20px;margin-bottom:10px}
+
+  /* a thumb stick, only on touch */
+  #stick{position:fixed;left:18px;bottom:calc(env(safe-area-inset-bottom,0px) + 96px);width:116px;height:116px;
+    border-radius:50%;border:1.5px solid var(--rule);background:color-mix(in srgb,var(--card) 62%,transparent);
+    display:none;touch-action:none;z-index:4}
+  #stick b{position:absolute;left:50%;top:50%;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;
+    background:color-mix(in srgb,var(--ember) 72%,transparent)}
+  body.touch #stick{display:block}
+  body.touch #keys{display:none}
+  @media (max-width:760px){
+    #rail{width:auto;left:12px;right:12px;top:auto;bottom:calc(env(safe-area-inset-bottom,0px) + 12px);max-height:none}
+    #rail h2{padding:6px 10px 5px}
+    #vps{display:flex;gap:4px;overflow-x:auto;overflow-y:hidden;padding:4px}
+    #vps button{min-width:140px;flex:0 0 auto}
+    #readout,#keys{display:none}
+    #plaque{max-width:calc(100vw - 24px)}
+    #plaque p{display:none}
+    .figs{margin-top:0;border-top:0;padding-top:6px}
+    #stick{bottom:calc(env(safe-area-inset-bottom,0px) + 112px)}
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div id="stage"><canvas id="c"></canvas></div>
+<div id="grain"></div>
+<div id="vig"></div>
+
+<div id="plaque" class="panel">
+  <h1>Isola Quieta Cabin</h1>
+  <p>One open room downstairs — a floor table, a piano, somewhere to sit, and nothing standing in the middle of it. Upstairs: sleeping, a fire on the gable with floor to sit round, and an onsen at a floor-level window.</p>
+  <div class="figs">
+    <div class="fig"><b>2.28 m</b><span>under the loft</span></div>
+    <div class="fig"><b>5.88 m</b><span>where you come in</span></div>
+    <div class="fig"><b>1.571 m</b><span>the door head</span></div>
+  </div>
+</div>
+
+<div id="rail" class="panel">
+  <h2>Stand here</h2>
+  <div id="vps"></div>
+</div>
+
+<div id="readout" class="panel">
+  <div><i>standing on</i> <span class="surf" id="r-surf">—</span></div>
+  <div><i>floor</i> <span id="r-floor">—</span> &nbsp;<i>eye</i> <span id="r-eye">—</span></div>
+  <div><i>x</i> <span id="r-x">—</span> &nbsp;<i>z</i> <span id="r-z">—</span></div>
+  <svg id="plan" width="176" height="118" viewBox="0 0 176 118" aria-label="plan of the cabin showing where you are"></svg>
+</div>
+
+<div id="keys" class="panel">
+  <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> walk &nbsp; <kbd>shift</kbd> run &nbsp; <kbd>F</kbd> fly<br>
+  mouse to look &nbsp; <kbd>G</kbd> grade &nbsp; <kbd>esc</kbd> release
+</div>
+
+<div id="gate">
+  <div>
+    <strong>Click to look around</strong>
+    <p>You come in stooping under a door head of 1.571 m, and the room goes up. The stair is on your left.</p>
+    <p>WASD to walk · mouse to look · F to fly</p>
+  </div>
+</div>
+
+<div id="err"><div><strong>The 3D library did not load</strong>
+  This page needs three.js from a CDN, and every candidate was blocked. Reloading usually fixes it; if it does not, the network is refusing the script.</div></div>
+
+<script>
+  // three.js, tried across both CDNs the Artifact CSP admits. A silent failure
+  // here would leave a black rectangle, so the last resort is a visible message.
+  (function () {
+    var SRCS = [
+      'https://cdnjs.cloudflare.com/ajax/libs/three.js/0.137.5/three.min.js',
+      'https://cdn.jsdelivr.net/npm/three@0.137.5/build/three.min.js',
+      'https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js',
+      'https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js'
+    ];
+    function next(i) {
+      if (i >= SRCS.length) { document.getElementById('err').style.display = 'grid'; return; }
+      var s = document.createElement('script');
+      s.src = SRCS[i];
+      s.onload = function () { window.THREE ? window.__cabinStart() : next(i + 1); };
+      s.onerror = function () { next(i + 1); };
+      document.head.appendChild(s);
+    }
+    window.__cabinLoad = function () { next(0); };
+  }());
+</script>
+
+<script>
+window.__cabinStart = function () {
+  'use strict';
+  const T = window.THREE;
+
+  /* ---------------------------------------------------------- the geometry
+     Packed by scripts/cabin_to_web.mjs: int16 positions over the mesh's own
+     bounding box, dequantised by the mesh transform rather than at load, and
+     uint8 colours which carry the entire bake - there are no lights in this
+     scene and no textures, exactly as the viewer's own materials work. */
+  const B64 = '__MESH_B64__';
+  const QSCALE = __SCALE__;
+  const raw = atob(B64);
+  const buf = new ArrayBuffer(raw.length);
+  const bytes = new Uint8Array(buf);
+  for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+  const hv = new DataView(buf);
+  const nVert = hv.getUint32(4, true), nIdx = hv.getUint32(8, true);
+  const centre = [hv.getFloat32(12, true), hv.getFloat32(16, true), hv.getFloat32(20, true)];
+  let o = 24;
+  const qp = new Int16Array(buf, o, nVert * 3); o += nVert * 6;
+  const qc = new Uint8Array(buf, o, nVert * 3); o += nVert * 3;
+  const qi = new Uint32Array(buf.slice(o, o + nIdx * 4));
+
+  const geo = new T.BufferGeometry();
+  geo.setAttribute('position', new T.Int16BufferAttribute(qp, 3, false));
+  geo.setAttribute('color', new T.Uint8BufferAttribute(qc, 3, true));
+  geo.setIndex(new T.BufferAttribute(qi, 1));
+  const mat = new T.MeshBasicMaterial({ vertexColors: true, side: T.DoubleSide });
+  const cabin = new T.Mesh(geo, mat);
+  cabin.scale.setScalar(QSCALE / 32767);
+  cabin.position.set(centre[0], centre[1], centre[2]);
+  cabin.frustumCulled = false;
+  geo.boundingSphere = new T.Sphere(new T.Vector3(0, 0, 0), 32767 * 1.8);
+
+  const scene = new T.Scene();
+  scene.add(cabin);
+
+  /* --------------------------------------------------------------- the room
+     House-local metres, straight out of reference/interior/plan-v4.json: x runs
+     along the ridge, +z is the front wall, y is up from the house node. */
+  const X0 = -4.634, X1 = 7.566, Z0 = -7.432, Z1 = 0.394;
+  const EARTH = 0.100, BOARDS = 0.520, LOFT = 2.800, RIDGE = 6.400;
+  // The loft's edge is an L now: x -0.100 behind the stairwell, x -0.95 in front
+  // of it. The flight stands INSIDE that well, so the strip east of the loft is
+  // clear end to end - which is the whole way in from the door to the room.
+  const RAIL_X = -0.100, WELL_X = -3.60, WELL_B = -2.92, WELL_F = -0.68;
+  const ST_A = -2.92, ST_B = -0.71;            // FOOT beside the piano, climbing forward
+  const EYE = 1.58, WALL = 0.30;
+  // The fire is upstairs now, standing on the measured stack, so its flue is a
+  // plain vertical and NOTHING stands on the floor below. It only obstructs on
+  // the loft, which is why the test is height-aware.
+  const STOVE = { x: -4.214, z: -3.52, r: 0.44 };  // upstairs and flush against the gable, so there is floor to sit round
+
+  /* The floor is computed, not raycast. The plan file already says exactly where
+     the two finishes, the stair and the loft are, so this is both exact and
+     free - and it means the stair is walkable without a collision mesh. */
+  function surfaceAt(x, z, y) {
+    if (x < WELL_X && z >= ST_A && z <= ST_B) {
+      const t = Math.min(1, Math.max(0, (ST_A - z) / (ST_A - ST_B)));
+      return { y: BOARDS + t * (LOFT - BOARDS), name: 'the stair' };
+    }
+    if (y > 2.10 && x <= RAIL_X && !(x < WELL_X && z > WELL_B && z < WELL_F))
+      return { y: LOFT, name: 'the loft' };
+    if (x >= 0.90 && x <= 3.10) return { y: EARTH, name: 'beaten earth — the way in' };
+    if (x > 3.10 && z <= -3.00) return { y: EARTH, name: 'beaten earth — the kitchen' };
+    return { y: BOARDS, name: 'the boards' };
+  }
+
+  /* --------------------------------------------------------- the viewpoints
+     The same camera positions the nine rendered stills were shot from, each
+     labelled with the measurement that put it there. */
+  const VPS = [
+    ['In at the door', [2.42, 1.68, 0.04], [-1.94, 1.38, -3.70], 'door head 1.671 \u00b7 you stoop'],
+    ['The piano', [1.92, 1.64, -1.86], [-0.12, 1.50, 0.24], 'by the door, the first thing you pass'],
+    ['The open room', [2.62, 1.78, -1.10], [-3.20, 1.52, -4.60], 'one room, 95.5 m\u00b2'],
+    ['The sofa', [-1.95, 2.36, -2.55], [-1.98, 1.46, -7.26], 'table between it and the television'],
+    ['A floor table', [4.28, 1.47, -3.00], [6.10, 0.80, -0.84], 'sill 0.624 \u00b7 104 mm over the boards'],
+    ['The kitchen', [3.18, 1.62, -3.52], [6.24, 1.30, -6.98], 'sill 0.940 \u00b7 counter height off the earth'],
+    ['The pantry', [4.30, 1.62, -2.96], [7.16, 1.34, -5.60], 'fridge, 1.38 m of wall, larder'],
+    ['The island', [3.22, 1.62, -4.02], [5.80, 1.14, -5.86], 'worktop 0.98 \u00b7 stools 0.685'],
+    ['The stair', [-1.36, 2.10, -3.30], [-4.26, 2.02, -2.20], 'its foot beside the piano'],
+    ['The bathroom', [-3.46, 1.98, -5.28], [-4.20, 1.68, -6.90], 'the one enclosed room'],
+    ['Round the fire', [-0.70, 3.94, -3.10], [-4.00, 3.24, -4.70], 'on the gable, with floor to sit round'],
+    ['The onsen', [-1.30, 3.85, -4.70], [-3.30, 3.22, -6.60], 'sill 2.820 \u00b7 20 mm over the loft boards'],
+    ['The cot and the bed', [-3.20, 3.86, -2.90], [-1.50, 3.14, -0.40], 'rear pane sill 2.820 \u00b7 20 mm up'],
+    ['Down from the loft', [-0.46, 4.50, -1.30], [3.00, 0.62, -3.00], 'loft 2.800 \u00b7 you look down, not out']
+  ];
+
+
+
+
+
+  /* ------------------------------------------------------------ the renderer */
+  const cv = document.getElementById('c');
+  const stage = document.getElementById('stage');
+  const renderer = new T.WebGLRenderer({ canvas: cv, antialias: true, powerPreference: 'high-performance' });
+  if ('outputColorSpace' in renderer) renderer.outputColorSpace = T.SRGBColorSpace || 'srgb';
+  else if ('outputEncoding' in renderer) renderer.outputEncoding = T.sRGBEncoding;
+  renderer.setClearColor(0x0d0906, 1);
+  const cam = new T.PerspectiveCamera(62, 1, 0.02, 80);
+  let yaw = Math.PI, pitch = -0.06;
+  const pos = new T.Vector3(2.24, EARTH + EYE, 0.08);
+  let fly = false, graded = true;
+  stage.classList.add('graded');
+
+  function resize() {
+    const w = Math.max(1, stage.clientWidth), h = Math.max(1, stage.clientHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(w, h, false);
+    cam.aspect = w / h;
+    cam.updateProjectionMatrix();
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  /* ---------------------------------------------------------------- controls */
+  const keys = Object.create(null);
+  const gate = document.getElementById('gate');
+  const touch = matchMedia('(hover:none)').matches || 'ontouchstart' in window;
+  if (touch) document.body.classList.add('touch');
+
+  function enter() {
+    gate.hidden = true;
+    if (!touch && cv.requestPointerLock) cv.requestPointerLock();
+  }
+  gate.addEventListener('click', enter);
+  cv.addEventListener('click', function () { if (!touch && !document.pointerLockElement) cv.requestPointerLock(); });
+  document.addEventListener('mousemove', function (e) {
+    if (document.pointerLockElement !== cv) return;
+    yaw -= e.movementX * 0.0022;
+    pitch = Math.max(-1.45, Math.min(1.45, pitch - e.movementY * 0.0022));
+  });
+  addEventListener('keydown', function (e) {
+    const k = e.key.toLowerCase();
+    keys[k] = true;
+    if (k === 'f') { fly = !fly; }
+    if (k === 'g') { graded = !graded; stage.classList.toggle('graded', graded); }
+    if (['w', 'a', 's', 'd', ' '].indexOf(k) >= 0) e.preventDefault();
+  });
+  addEventListener('keyup', function (e) { keys[e.key.toLowerCase()] = false; });
+
+  // touch: drag anywhere to look, thumb stick to walk
+  let look = null;
+  const stickEl = document.createElement('div');
+  stickEl.id = 'stick';
+  stickEl.innerHTML = '<b></b>';
+  document.body.appendChild(stickEl);
+  const nub = stickEl.firstChild;
+  let stick = { x: 0, y: 0, id: null };
+  stickEl.addEventListener('pointerdown', function (e) { stick.id = e.pointerId; stickEl.setPointerCapture(e.pointerId); moveStick(e); });
+  stickEl.addEventListener('pointermove', function (e) { if (stick.id === e.pointerId) moveStick(e); });
+  stickEl.addEventListener('pointerup', function (e) { if (stick.id === e.pointerId) { stick = { x: 0, y: 0, id: null }; nub.style.transform = ''; } });
+  function moveStick(e) {
+    const r = stickEl.getBoundingClientRect();
+    let dx = (e.clientX - (r.left + r.width / 2)) / (r.width / 2);
+    let dy = (e.clientY - (r.top + r.height / 2)) / (r.height / 2);
+    const m = Math.hypot(dx, dy);
+    if (m > 1) { dx /= m; dy /= m; }
+    stick.x = dx; stick.y = dy;
+    nub.style.transform = 'translate(' + (dx * r.width * 0.28) + 'px,' + (dy * r.height * 0.28) + 'px)';
+  }
+  cv.addEventListener('pointerdown', function (e) { if (!touch) return; look = { id: e.pointerId, x: e.clientX, y: e.clientY }; gate.hidden = true; });
+  cv.addEventListener('pointermove', function (e) {
+    if (!touch || !look || look.id !== e.pointerId) return;
+    yaw -= (e.clientX - look.x) * 0.0055;
+    pitch = Math.max(-1.45, Math.min(1.45, pitch - (e.clientY - look.y) * 0.0055));
+    look.x = e.clientX; look.y = e.clientY;
+  });
+  cv.addEventListener('pointerup', function () { look = null; });
+
+  /* -------------------------------------------------------------- viewpoints */
+  const vpsEl = document.getElementById('vps');
+  VPS.forEach(function (v, i) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.id = 'vp' + i;
+    b.innerHTML = '';
+    b.appendChild(document.createTextNode(v[0]));
+    const em = document.createElement('em');
+    em.textContent = v[3];
+    b.appendChild(em);
+    b.addEventListener('click', function () { goTo(i); });
+    vpsEl.appendChild(b);
+  });
+  function goTo(i) {
+    const v = VPS[i];
+    pos.set(v[1][0], v[1][1], v[1][2]);
+    const dx = v[2][0] - v[1][0], dy = v[2][1] - v[1][1], dz = v[2][2] - v[1][2];
+    yaw = Math.atan2(-dx, -dz);
+    pitch = Math.atan2(dy, Math.hypot(dx, dz));
+    for (let k = 0; k < VPS.length; k++) document.getElementById('vp' + k).classList.toggle('on', k === i);
+  }
+
+  /* ------------------------------------------------------------- the plan svg */
+  const plan = document.getElementById('plan');
+  const PW = 176, PH = 118, PAD = 8;
+  const sx = (PW - PAD * 2) / (X1 - X0), sz = (PH - PAD * 2 - 14) / (Z1 - Z0);
+  const PS = Math.min(sx, sz);
+  const px = (x) => PAD + (x - X0) * PS, pz = (z) => PAD + (z - Z0) * PS;
+  const ns = 'http://www.w3.org/2000/svg';
+  function el(n, a) { const e = document.createElementNS(ns, n); for (const k in a) e.setAttribute(k, a[k]); return e; }
+  plan.appendChild(el('rect', { x: px(X0), y: pz(Z0), width: (X1 - X0) * PS, height: (Z1 - Z0) * PS, fill: 'none', stroke: 'currentColor', 'stroke-width': 1.3, opacity: .55 }));
+  plan.appendChild(el('rect', { x: px(0.90), y: pz(Z0), width: 2.20 * PS, height: (Z1 - Z0) * PS, fill: 'currentColor', opacity: .12 }));
+  plan.appendChild(el('rect', { x: px(3.10), y: pz(Z0), width: (X1 - 3.10) * PS, height: 4.432 * PS, fill: 'currentColor', opacity: .12 }));
+  plan.appendChild(el('rect', { x: px(X0), y: pz(Z0), width: (RAIL_X - X0) * PS, height: (Z1 - Z0) * PS, fill: 'none', stroke: 'currentColor', 'stroke-width': 1, 'stroke-dasharray': '3 2.5', opacity: .5 }));
+  plan.appendChild(el('circle', { cx: px(STOVE.x), cy: pz(STOVE.z), r: 0.26 * PS, fill: 'none',
+    stroke: 'currentColor', 'stroke-width': 1.1, 'stroke-dasharray': '2.5 2', opacity: .55 }));   // the fire, overhead
+  plan.appendChild(el('rect', { x: px(X0), y: pz(Z0), width: 1.53 * PS, height: 2.03 * PS, fill: 'currentColor', opacity: .22 }));
+  const you = el('circle', { r: 3.1, fill: 'var(--ember)' });
+  const dir = el('path', { fill: 'var(--ember)', opacity: .8 });
+  plan.appendChild(dir); plan.appendChild(you);
+  const lbl = el('text', { x: PAD, y: PH - 3, fill: 'currentColor', opacity: .6, 'font-size': 8.5, 'font-family': 'IBM Plex Mono, monospace' });
+  lbl.textContent = 'front wall at the bottom · 12.20 × 7.83 m';
+  plan.appendChild(lbl);
+
+  /* ----------------------------------------------------------------- the loop */
+  const rSurf = document.getElementById('r-surf'), rFloor = document.getElementById('r-floor');
+  const rEye = document.getElementById('r-eye'), rX = document.getElementById('r-x'), rZ = document.getElementById('r-z');
+  const fwd = new T.Vector3(), right = new T.Vector3(), up = new T.Vector3(0, 1, 0);
+  let last = performance.now();
+
+  function blocked(x, z) {
+    if (pos.y < 2.10) return false;                  // downstairs there is nothing to walk into
+    return Math.hypot(x - STOVE.x, z - STOVE.z) < STOVE.r;
+  }
+
+  function step(dt) {
+    const run = keys.shift ? 2.3 : 1.0;
+    const speed = (fly ? 3.4 : 1.55) * run * dt;
+    let f = 0, s = 0;
+    if (keys.w || keys.arrowup) f += 1;
+    if (keys.s || keys.arrowdown) f -= 1;
+    if (keys.a || keys.arrowleft) s -= 1;
+    if (keys.d || keys.arrowright) s += 1;
+    if (stick.id !== null) { f -= stick.y; s += stick.x; }
+    const m = Math.hypot(f, s);
+    if (m > 1) { f /= m; s /= m; }
+
+    fwd.set(-Math.sin(yaw), 0, -Math.cos(yaw));
+    right.crossVectors(fwd, up).normalize();
+    const nx = pos.x + (fwd.x * f + right.x * s) * speed;
+    const nz = pos.z + (fwd.z * f + right.z * s) * speed;
+
+    if (fly) {
+      const cp = Math.cos(pitch), sp = Math.sin(pitch);
+      pos.x += (fwd.x * cp * f + right.x * s) * speed;
+      pos.z += (fwd.z * cp * f + right.z * s) * speed;
+      pos.y += sp * f * speed;
+      pos.x = Math.max(X0 - 1, Math.min(X1 + 1, pos.x));
+      pos.z = Math.max(Z0 - 1, Math.min(Z1 + 1, pos.z));
+      pos.y = Math.max(EARTH + 0.2, Math.min(RIDGE - 0.15, pos.y));
+      rSurf.textContent = 'flying';
+    } else {
+      const here = surfaceAt(pos.x, pos.z, pos.y);
+      const cx = Math.max(X0 + WALL, Math.min(X1 - WALL, nx));
+      const cz = Math.max(Z0 + WALL, Math.min(Z1 - WALL, nz));
+      // One rule does the work of a collision mesh: you may rise 0.45 m in a
+      // stride and fall 1.20 m, so the flight is walkable from its foot only and
+      // the loft's edge holds you. LOFT - BOARDS is 2.28 m, well past the drop.
+      const okStep = function (x, z) {
+        if (blocked(x, z)) return false;
+        const t = surfaceAt(x, z, pos.y);
+        return t.y - here.y <= 0.45 && here.y - t.y <= 1.20;
+      };
+      if (okStep(cx, pos.z)) pos.x = cx;
+      if (okStep(pos.x, cz)) pos.z = cz;
+      const now = surfaceAt(pos.x, pos.z, pos.y);
+      const target = now.y + EYE;
+      pos.y += Math.max(-4.5 * dt, Math.min(4.5 * dt, target - pos.y));
+      rSurf.textContent = now.name;
+      rFloor.textContent = now.y.toFixed(3) + ' m';
+    }
+    rEye.textContent = pos.y.toFixed(2) + ' m';
+    rX.textContent = (pos.x >= 0 ? '+' : '−') + Math.abs(pos.x).toFixed(2);
+    rZ.textContent = (pos.z >= 0 ? '+' : '−') + Math.abs(pos.z).toFixed(2);
+
+    you.setAttribute('cx', px(pos.x));
+    you.setAttribute('cy', pz(pos.z));
+    const hx = px(pos.x) - Math.sin(yaw) * 9, hy = pz(pos.z) - Math.cos(yaw) * 9;
+    const ax = px(pos.x) - Math.cos(yaw) * 3.4, ay = pz(pos.z) + Math.sin(yaw) * 3.4;
+    const bx = px(pos.x) + Math.cos(yaw) * 3.4, by = pz(pos.z) - Math.sin(yaw) * 3.4;
+    dir.setAttribute('d', 'M' + hx + ' ' + hy + 'L' + ax + ' ' + ay + 'L' + bx + ' ' + by + 'Z');
+
+    cam.position.copy(pos);
+    cam.rotation.set(0, 0, 0);
+    cam.rotateY(yaw);
+    cam.rotateX(pitch);
+  }
+
+  function frame(t) {
+    const dt = Math.min(0.05, (t - last) / 1000);
+    last = t;
+    step(dt);
+    renderer.render(scene, cam);
+    requestAnimationFrame(frame);
+  }
+  goTo(0);
+  requestAnimationFrame(frame);
+};
+window.__cabinLoad();
+</script>
