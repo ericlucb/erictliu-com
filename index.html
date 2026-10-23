@@ -161,8 +161,10 @@
     #kPanelB { top:auto !important; bottom:calc(100% + 9px) !important; width:min(720px, calc((var(--mr) + var(--pw) * 0.4375) * 2 - 16px)) !important; max-height:calc(var(--vph) * 0.62) !important; }
   }
   /* The door to Isola Quieta: a small door with ENTER under it. Nothing loads
-     until the click; then the word gives way to a ring that fills with the
-     real download and a count, the door swings open on its hinge (a 3D turn
+     until the click; then the word gives way to a status - what is happening,
+     in a word, over a thin line that fills with the real download and the
+     viewer's stages (Eric: 'not a ring, just a status indicator') - the door
+     swings open on its hinge (a 3D turn
      under the icon's own perspective), and the world fades in over the page.
      The leaf and the glow are HTML over the SVG frame so they can turn in 3D. */
   #kEnter { display:grid; justify-items:center; gap:4px; position:relative; text-decoration:none; }
@@ -187,6 +189,13 @@
   #kEnter:not(.kLoading) .kPct { width:1px; overflow:hidden; }   /* resting, the count is only a voice (the reason the door could not open): no width to push the door aside */
   #kEnter.kLoading .kPct { opacity:.75; }
   #kEnter.kOpen .kPct { opacity:0; transition-delay:.3s; }
+  #kEnter .kRing, #kEnter .kRingFill { display:none; }   /* (the ring the load once filled: a status line now) */
+  #kEnter .kLine { grid-area:3 / 1; position:relative; width:clamp(46px, 4.2vw, 64px); height:2px; border-radius:1px; overflow:hidden; opacity:0; transition:opacity .35s ease; }
+  #kEnter .kLine::before, #kEnter .kLine i { content:''; position:absolute; inset:0; background:currentColor; }
+  #kEnter .kLine::before { opacity:.25; }
+  #kEnter .kLine i { transform-origin:0 50%; transform:scaleX(var(--kf, .02)); }
+  #kEnter.kLoading .kLine { opacity:.8; }
+  #kEnter.kOpen .kLine { opacity:0; transition-delay:.3s; }
   #kDoor { position:fixed; inset:0; z-index:40; background:#5d5f7e; opacity:0; transition:opacity 1.6s cubic-bezier(.4,0,.2,1); }
   #kDoor.open { opacity:1; }
   #kDoor iframe { position:absolute; inset:0; width:100%; height:100%; border:0; background:#5d5f7e; }
@@ -319,7 +328,7 @@
         <svg viewBox="0 0 64 64"><circle class="kRing" cx="32" cy="32" r="29"></circle><circle class="kRingFill" cx="32" cy="32" r="29" stroke-dasharray="182.21" stroke-dashoffset="167.63"></circle><rect x="20" y="14" width="24" height="36" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"></rect></svg>
         <span class="kGlow"></span><span class="kLeaf"></span>
       </span>
-      <span class="kWord">ENTER</span><span class="kPct" aria-live="polite"></span>
+      <span class="kWord">ENTER</span><span class="kPct" aria-live="polite"></span><span class="kLine" aria-hidden="true"><i></i></span>
     </a>
   </nav>
 
@@ -567,7 +576,8 @@ class Component extends DCLogic {
     const WORDS = [[0.20, 'loading'], [0.45, 'gathering'], [0.60, 'unfolding'], [0.76, 'taking shape'], [0.92, 'settling'], [1, 'almost there']];
     const loadWord = (f) => { for (const [lim, w] of WORDS) if (f < lim) return w + '\u2026'; return 'opening\u2026'; };
     let said = '';
-    const paint = (f) => { shown = f; ring.style.strokeDashoffset = (C * (1 - Math.max(0, Math.min(1, f)))).toFixed(2); const w = loadWord(f); if (w !== said) { said = w; pct.textContent = w; if (titled) document.title = w + ' \u00b7 ' + title0; } if (tell) tell({ isola: 'progress', f }); };
+    const line = en.querySelector('.kLine');
+    const paint = (f) => { shown = f; ring.style.strokeDashoffset = (C * (1 - Math.max(0, Math.min(1, f)))).toFixed(2); if (line) line.style.setProperty('--kf', Math.max(0.02, Math.min(1, f)).toFixed(3)); const w = loadWord(f); if (w !== said) { said = w; pct.textContent = w; if (titled) document.title = w + ' \u00b7 ' + title0; } if (tell) tell({ isola: 'progress', f }); };
     const setBar = (f) => { target = Math.max(target, f); };
     const creepTo = (ceiling, tau = 3) => { creep = { from: Math.max(target, shown), to: ceiling, t0: performance.now(), tau: tau * 1000 }; };
     let lastTick = performance.now();
