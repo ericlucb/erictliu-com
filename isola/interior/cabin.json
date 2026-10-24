@@ -1,7 +1,7 @@
 {
  "lightmap": "lightmap.webp",
  "lm_scale": 4.0,
- "vl_scale": 11.101197694477282,
+ "vl_scale": 10.075198379316326,
  "objects": {
   "x_wood_pine": {
    "kind": "lit",
@@ -200,12 +200,6 @@
    "class": "towel",
    "tex": true,
    "tint": true
-  },
-  "cabin_photo": {
-   "kind": "vlit",
-   "class": "photo",
-   "tex": true,
-   "tint": false
   },
   "cabin_quilt": {
    "kind": "vlit",
@@ -477,14 +471,14 @@
   "note": "world = translation + Ry(yaw) * local. Local (0,0,0) is world (0, 1.242, -1). Local +x -> world (0.6436, 0, -0.7653); local +z -> world (0.7653, 0, 0.6436)."
  },
  "triangles": {
-  "cabin_wood_pine": 3362,
-  "cabin_wood": 1693,
-  "cabin_wood_dark_v": 1074,
-  "cabin_wood_dark": 800,
+  "cabin_wood_pine": 3344,
+  "cabin_wood": 1613,
+  "cabin_wood_dark_v": 876,
+  "cabin_wood_dark": 802,
   "cabin_wood_pine_v": 1590,
-  "cabin_wood_v": 21996,
+  "cabin_wood_v": 21892,
   "cabin_appliance": 3476,
-  "cabin_iron": 17110,
+  "cabin_iron": 16598,
   "cabin_glass": 862,
   "cabin_curtain": 98560,
   "cabin_stone": 8,
@@ -496,15 +490,14 @@
   "cabin_linen": 13200,
   "cabin_gloss_black": 1714,
   "cabin_book": 534,
-  "cabin_paint": 38030,
-  "cabin_scene": 18,
+  "cabin_paint": 44794,
+  "cabin_scene": 20,
   "cabin_ceramic": 1164,
   "cabin_score": 4,
   "cabin_knit": 574,
   "cabin_cloth": 1180,
   "cabin_plaster_part": 772,
   "cabin_towel": 6346,
-  "cabin_photo": 30,
   "cabin_quilt": 20918,
   "cabin_char": 2008,
   "cabin_ember": 3638,
@@ -516,11 +509,11 @@
   "cabin_hessian": 4862,
   "cabin_earth": 6,
   "cabin_flame": 144,
-  "cabin_drawing": 4,
+  "cabin_drawing": 12,
   "cabin_leaf": 720,
-  "cabin_shell": 396,
-  "cabin_props": 565568,
-  "cabin_bigprops": 16051
+  "cabin_shell": 387,
+  "cabin_props": 604331,
+  "cabin_bigprops": 15942
  },
  "fires": [
   {
@@ -762,8 +755,8 @@
    -1.7153,
    0.91,
    -6.0473,
-   0.1165,
-   0.0913,
+   0.1234,
+   0.0878,
    0.9096,
    0.4155
   ],
@@ -852,8 +845,8 @@
    -2.65,
    0.52,
    -2.44,
-   0.1897,
-   0.0421,
+   0.202,
+   0.0502,
    0.0995,
    0.995
   ],
@@ -883,6 +876,15 @@
    0.3866,
    1.0,
    0.0
+  ],
+  [
+   5.405,
+   0.868,
+   -1.32,
+   0.0498,
+   0.048,
+   0.9285,
+   0.3714
   ],
   [
    5.85,
@@ -1050,8 +1052,8 @@
    7.316,
    1.194,
    -4.05,
-   0.0716,
-   0.0739,
+   0.0664,
+   0.064,
    0.4472,
    -0.8944
   ],
@@ -1437,8 +1439,8 @@
    -0.6843,
    3.15,
    -7.1139,
-   0.1165,
-   0.0913,
+   0.1092,
+   0.057,
    0.9077,
    0.4197
   ],
@@ -1635,8 +1637,8 @@
    6.56,
    0.958,
    -7.092,
-   0.0537,
-   0.0554,
+   0.0498,
+   0.048,
    0.9285,
    0.3714
   ],
