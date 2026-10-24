@@ -574,7 +574,7 @@ class Component extends DCLogic {
     // the words move on a clock of their own, not with the count (Eric: 'keep changing the words, don't stall them
     // based on progress'): one every 2.2 s, round again from the second; 'opening' once the world is ready. The
     // viewer's panel follows the word it is sent on each tick (isola/src/opening.js), so nothing starts over
-    const WORDS = ['loading', 'gathering', 'unfolding', 'taking shape', 'settling', 'drifting', 'warming'];
+    const WORDS = ['stirring', 'gathering', 'unfolding', 'taking shape', 'settling', 'drifting', 'warming'];
     let said = '', wordAt = 0;
     const say = (w) => { if (w === said) return; said = w; pct.textContent = w; const dots = document.createElement('span'); dots.className = 'kDots'; dots.setAttribute('aria-hidden', 'true'); dots.innerHTML = '<i>.</i><i>.</i><i>.</i>'; pct.appendChild(dots); if (titled) document.title = w + '\u2026 \u00b7 ' + title0; };
     const words = setInterval(() => { if (shown >= 1) { clearInterval(words); return; } wordAt = wordAt + 1 < WORDS.length ? wordAt + 1 : 1; say(WORDS[wordAt]); if (tell) tell({ isola: 'progress', f: shown, w: wordAt }); }, 2200);
