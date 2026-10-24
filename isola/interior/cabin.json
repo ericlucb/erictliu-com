@@ -1,7 +1,7 @@
 {
  "lightmap": "lightmap.webp",
  "lm_scale": 4.0,
- "vl_scale": 10.075198379316326,
+ "vl_scale": 9.87829509534334,
  "objects": {
   "x_wood_pine": {
    "kind": "lit",
@@ -207,16 +207,16 @@
    "tex": true,
    "tint": false
   },
-  "cabin_char": {
-   "kind": "vlit",
-   "class": "char",
-   "tex": true,
-   "tint": true
-  },
   "cabin_ember": {
    "kind": "unlit",
    "class": "ember",
    "tex": false,
+   "tint": true
+  },
+  "cabin_char": {
+   "kind": "vlit",
+   "class": "char",
+   "tex": true,
    "tint": true
   },
   "cabin_bark": {
@@ -478,12 +478,12 @@
   "cabin_wood_pine_v": 1590,
   "cabin_wood_v": 21892,
   "cabin_appliance": 3476,
-  "cabin_iron": 16598,
+  "cabin_iron": 16584,
   "cabin_glass": 862,
   "cabin_curtain": 98560,
-  "cabin_stone": 8,
+  "cabin_stone": 4,
   "cabin_mirror": 44,
-  "cabin_brass": 6568,
+  "cabin_brass": 6492,
   "cabin_wool": 7144,
   "cabin_contents": 175,
   "cabin_pages": 32,
@@ -499,27 +499,27 @@
   "cabin_plaster_part": 772,
   "cabin_towel": 6346,
   "cabin_quilt": 20918,
-  "cabin_char": 2008,
-  "cabin_ember": 3638,
-  "cabin_bark": 8,
-  "cabin_endgrain": 12,
-  "cabin_tile": 28,
+  "cabin_tile": 64,
+  "cabin_earth": 10,
+  "cabin_ember": 9590,
+  "cabin_char": 3928,
+  "cabin_bark": 18,
+  "cabin_endgrain": 24,
   "cabin_hinoki_v": 252,
   "cabin_water": 3136,
   "cabin_hessian": 4862,
-  "cabin_earth": 6,
   "cabin_flame": 144,
   "cabin_drawing": 12,
   "cabin_leaf": 720,
   "cabin_shell": 387,
-  "cabin_props": 604331,
+  "cabin_props": 616350,
   "cabin_bigprops": 15942
  },
  "fires": [
   {
    "at": [
     -4.099,
-    3.187,
+    3.1849999999999996,
     -4.7
    ],
    "u": [
@@ -534,7 +534,7 @@
    ],
    "width": 0.2,
    "height": 0.28,
-   "floor": 3.1769999999999996
+   "floor": 3.175
   }
  ],
  "candles": [
@@ -553,7 +553,7 @@
  ],
  "pour": [
   -4.094000000000001,
-  -7.057000000000001
+  -7.097
  ],
  "cat": [
   4.86,
@@ -1349,8 +1349,8 @@
    -4.214,
    2.8125,
    -4.7,
-   0.2525,
-   0.2098,
+   0.2581,
+   0.213,
    0.0,
    1.0
   ],
