@@ -1,7 +1,7 @@
 {
  "lightmap": "lightmap.webp",
  "lm_scale": 4.0,
- "vl_scale": 9.87829509534334,
+ "vl_scale": 9.80892482556795,
  "objects": {
   "x_wood_pine": {
    "kind": "lit",
@@ -512,7 +512,7 @@
   "cabin_drawing": 12,
   "cabin_leaf": 720,
   "cabin_shell": 387,
-  "cabin_props": 616350,
+  "cabin_props": 616488,
   "cabin_bigprops": 15942
  },
  "fires": [
