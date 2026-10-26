@@ -740,7 +740,7 @@ class Component extends DCLogic {
     history.pushState({ isola: 'door' }, '', location.href);
     this.onDoorPop = (e) => { if (e.state && e.state.isola === 'door') return; this.closeDoor(true); };   // (a popstate that lands on the door's own entry is not a way out)
     addEventListener('popstate', this.onDoorPop);
-    const pass = ['stats', 'dev', 'tier', 'dpr'].filter(k => new URLSearchParams(location.search).has(k)).map(k => '&' + k + '=' + encodeURIComponent(new URLSearchParams(location.search).get(k) || '1')).join('');
+    const pass = ['stats', 'dev', 'tier', 'dpr', 'fish'].filter(k => new URLSearchParams(location.search).has(k)).map(k => '&' + k + '=' + encodeURIComponent(new URLSearchParams(location.search).get(k) || '1')).join('');
     frame.src = './isola/?embed=1' + pass + (this.constructor.WORLD ? '&world=' + encodeURIComponent(this.constructor.WORLD) : '');   // (?stats=1 on this page shows the viewer's numbers on screen)
     // 'no answer' only after 20 s with neither a hello nor a byte of the world: a slow link that
     // is still downloading is not a dead viewer
