@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Isola Fishing</title>
+<meta name="description" content="A fishing sandbox for Isola Quieta: the rod, the line, the float and the fish as physics, at the end of the pier.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700&display=swap">
+<style>
+  /* the page under the game; the game's words are fishing/ui.js */
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #2f6f95; }
+  #scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; outline: none; }
+  #fade { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; opacity: 0; }
+</style>
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.js" } }
+</script>
+</head>
+<body>
+<canvas id="scene" tabindex="0" aria-label="the end of the pier. space casts and strikes, s reels, e twitches, a and d lean the rod."></canvas>
+<canvas id="fade" aria-hidden="true"></canvas>
+<script type="module">
+import { startGame } from './src/fishing/game.js';
+import { mountUI } from './src/fishing/ui.js';
+mountUI();
+startGame({ pano: window.FISHING_PANO || './sky_panorama.jpg', glbs: window.FISHING_GLBS });
+</script>
+</body>
+</html>
